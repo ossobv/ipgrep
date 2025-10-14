@@ -1,0 +1,9 @@
+[package]
+name = "ipgrep"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "wrap_help"] }
+memchr = "2"
+ipnet = "2"
