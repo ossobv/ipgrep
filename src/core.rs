@@ -90,8 +90,8 @@ pub fn run(params: &params::Parameters) -> Result<ExitCode, String> {
         loop {
             line.clear();
 
-            // TODO: This could use some test case. But it looks like it works, even including
-            // files without trailing newlines.
+            // TODO: This could use some test case. But it looks like it
+            // works, even including files without trailing newlines.
             let _n = match reader.read_until(b'\n', &mut line) {
                 Ok(0) => break,
                 Ok(n) => n,

@@ -10,6 +10,7 @@ pub struct NetCandidate {
     pub net: Net,
 }
 
+// FIXME: use builder pattern here too
 pub struct NetCandidateScanner {
     include_ipv4: bool,
     include_ipv6: bool,
