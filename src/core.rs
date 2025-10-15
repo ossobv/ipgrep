@@ -7,7 +7,7 @@ use crate::params;
 use crate::scanner;
 
 /// Entry point for the application, called from main().
-pub fn run(params: &params::Parameters) -> Result<ExitCode, String> {
+pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
     //eprintln!("DBG: {:?}", params);
 
     let needles = &params.needles;
@@ -66,7 +66,7 @@ pub fn run(params: &params::Parameters) -> Result<ExitCode, String> {
     };
 
     // Create display that knows how to output.
-    let display = Display::new()
+    let disp = Display::new()
         .show_filename(show_filename)
         .show_lineno(params.show_lineno)
         .show_color(with_color);
@@ -116,46 +116,37 @@ pub fn run(params: &params::Parameters) -> Result<ExitCode, String> {
             if !matches.is_empty() {
                 any_match = true;
 
-                // FIXME: the nofail fails on "|head" with pipe error
                 match params.output_style {
                     OutputStyle::ShowNothing => break,
                     OutputStyle::ShowFilesOnlyNull => {
-                        display
-                            .print_filename(&mut writer, &file.name, b"\0")
-                            .expect("nofail");
+                        disp.print_filename(&mut writer, &file.name, b"\0")?;
                         break;
                     }
                     OutputStyle::ShowFilesOnly => {
-                        display
-                            .print_filename(&mut writer, &file.name, b"\n")
-                            .expect("nofail");
+                        disp.print_filename(&mut writer, &file.name, b"\n")?;
                         break;
                     }
                     OutputStyle::ShowCountsPerFile => {
                         match_count += matches.len();
                     }
                     OutputStyle::ShowOnlyMatching => {
-                        display
-                            .print_matches(
-                                &mut writer,
-                                &file.name,
-                                lineno,
-                                &line,
-                                &matches,
-                            )
-                            .expect("nofail");
+                        disp.print_matches(
+                            &mut writer,
+                            &file.name,
+                            lineno,
+                            &line,
+                            &matches,
+                        )?;
                     }
                     OutputStyle::ShowLinesAndContext => {
                         // FIXME: add the missing context
-                        display
-                            .print_line(
-                                &mut writer,
-                                &file.name,
-                                lineno,
-                                &line,
-                                &matches,
-                            )
-                            .expect("nofail");
+                        disp.print_line(
+                            &mut writer,
+                            &file.name,
+                            lineno,
+                            &line,
+                            &matches,
+                        )?;
                     }
                 }
 
@@ -171,9 +162,7 @@ pub fn run(params: &params::Parameters) -> Result<ExitCode, String> {
             }
             OutputStyle::ShowFilesOnlyNull | OutputStyle::ShowFilesOnly => {}
             OutputStyle::ShowCountsPerFile => {
-                display
-                    .print_counts(&mut writer, &file.name, match_count)
-                    .expect("nofail");
+                disp.print_counts(&mut writer, &file.name, match_count)?;
             }
             OutputStyle::ShowOnlyMatching
             | OutputStyle::ShowLinesAndContext => {}

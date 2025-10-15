@@ -1,3 +1,6 @@
+use std::io::ErrorKind;
+use std::process::ExitCode;
+
 use ipgrep::cli::Args;
 use ipgrep::core::run;
 
@@ -15,15 +18,19 @@ use ipgrep::core::run;
 // user    0m0.012s
 // sys     0m0.030s // slightly more syscalls (31372)
 //
-fn main() -> std::process::ExitCode {
+fn main() -> ExitCode {
     let args = Args::parse();
     let params = args.into_parameters();
 
     match run(&params) {
         Ok(code) => code,
         Err(e) => {
-            eprintln!("ipgrep: {e}");
-            std::process::ExitCode::from(2)
+            if e.kind() == ErrorKind::BrokenPipe {
+                ExitCode::SUCCESS // gracefully handle EPIPE on stdout
+            } else {
+                eprintln!("ipgrep: {e}");
+                ExitCode::from(2)
+            }
         }
     }
 }
