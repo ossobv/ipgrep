@@ -117,13 +117,9 @@ pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
                 any_match = true;
 
                 match params.output_style {
-                    OutputStyle::ShowNothing => break,
-                    OutputStyle::ShowFilesOnlyNull => {
-                        disp.print_filename(&mut writer, &file.name, b"\0")?;
-                        break;
-                    }
-                    OutputStyle::ShowFilesOnly => {
-                        disp.print_filename(&mut writer, &file.name, b"\n")?;
+                    OutputStyle::JustExitCode
+                    | OutputStyle::ShowFilesWithLf
+                    | OutputStyle::ShowFilesWithNull => {
                         break;
                     }
                     OutputStyle::ShowCountsPerFile => {
@@ -155,12 +151,17 @@ pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
         }
 
         match params.output_style {
-            OutputStyle::ShowNothing => {
+            OutputStyle::JustExitCode => {
                 if any_match {
                     break;
                 }
             }
-            OutputStyle::ShowFilesOnlyNull | OutputStyle::ShowFilesOnly => {}
+            OutputStyle::ShowFilesWithLf => {
+                disp.print_filename(&mut writer, &file.name, b"\n")?;
+            }
+            OutputStyle::ShowFilesWithNull => {
+                disp.print_filename(&mut writer, &file.name, b"\0")?;
+            }
             OutputStyle::ShowCountsPerFile => {
                 disp.print_counts(&mut writer, &file.name, match_count)?;
             }

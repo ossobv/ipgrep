@@ -317,13 +317,13 @@ impl Args {
     fn make_output_style(&self) -> OutputStyle {
         if self.quiet {
             // -q/--quiet
-            OutputStyle::ShowNothing
+            OutputStyle::JustExitCode
         } else if self.files_with_matches && self.null {
             // -l/--file-with-matches, -Z/--null
-            OutputStyle::ShowFilesOnlyNull
+            OutputStyle::ShowFilesWithNull
         } else if self.files_with_matches {
             // -l/--file-with-matches
-            OutputStyle::ShowFilesOnly
+            OutputStyle::ShowFilesWithLf
         } else if self.count {
             // -c/--count
             OutputStyle::ShowCountsPerFile
@@ -334,17 +334,6 @@ impl Args {
             OutputStyle::ShowLinesAndContext
         }
     }
-
-    /*
-    fn make_show_filename(&self) -> bool {
-        // Show filenames if haystacks > 1 ..
-        if self.haystacks.len() > 1 {
-            !self.no_filename // .. except if the user wants them hidden
-        } else {
-            false
-        }
-    }
-    */
 }
 
 /// Conversion from String to NeedleArg during clap arg parsing

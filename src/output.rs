@@ -21,11 +21,11 @@ const COLOR_RESET: &str = "\x1b[0m";
 #[derive(Debug)]
 pub enum OutputStyle {
     // Only exit with status
-    ShowNothing,
-    // Only files that have a match, NUL terminated
-    ShowFilesOnlyNull,
+    JustExitCode,
     // Only files that have a match
-    ShowFilesOnly,
+    ShowFilesWithLf,
+    // Only files that have a match, NUL terminated
+    ShowFilesWithNull,
     // All files, and a count of matches
     ShowCountsPerFile,
     // Show only the matches (no lines, no context)
