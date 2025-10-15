@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4", features = ["derive", "wrap_help"] }
+git-version = "0"
 memchr = "2"
 ipnet = "2"
 

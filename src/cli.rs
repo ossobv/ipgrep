@@ -8,6 +8,8 @@ use crate::params::{
     Parameters, RecurseHaystacks,
 };
 
+const GIT_VERSION: &str = git_version::git_version!();
+
 #[derive(Clone, ValueEnum, Debug)]
 pub enum AcceptSetArg {
     // no alias, "ip" is default and short enough
@@ -48,7 +50,7 @@ pub struct NeedleArg(pub String);
 #[derive(Parser, Debug)]
 #[command(
     name="ipgrep",
-    version,
+    version=GIT_VERSION,
     about="Search IP addresses and networks in text files",
     disable_help_flag=true,     // we use "-h" for "no-filename"
     disable_version_flag=true,  // we position it manually
