@@ -1,6 +1,7 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
+use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 
 // Attempt at fixing that last bit of performance, but does not change wall
@@ -25,9 +26,16 @@ enum FileEntry {
     NoFollowPath(PathBuf),
 }
 
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
+struct DirId {
+    dev: u64,
+    ino: u64,
+}
+
 pub struct FileSourceIter {
     stack: VecDeque<FileEntry>,
     recurse: RecurseHaystacks,
+    dirs_seen: HashSet<DirId>,
 }
 
 #[allow(clippy::new_without_default)]
@@ -37,6 +45,7 @@ impl FileSourceIter {
         FileSourceIter {
             stack: VecDeque::new(),
             recurse: RecurseHaystacks::No,
+            dirs_seen: HashSet::<DirId>::new(),
         }
     }
 
@@ -128,8 +137,6 @@ impl FileSourceIter {
         path: &PathBuf,
         follow: bool,
     ) -> Option<<Self as Iterator>::Item> {
-        // FIXME(future): File system loop detected; 'src/src' is part
-        // of the same file system loop as 'src/'.
         let stat = match match follow {
             true => fs::metadata(path),          // stat
             false => fs::symlink_metadata(path), // lstat
@@ -143,7 +150,19 @@ impl FileSourceIter {
         if stat.is_symlink() {
             self.next_path_symlink()
         } else if stat.is_dir() {
-            self.next_path_dir(path)
+            let dir_id = DirId {
+                dev: stat.dev(),
+                ino: stat.ino(),
+            };
+            if self.dirs_seen.insert(dir_id) {
+                self.next_path_dir(path)
+            } else {
+                eprintln!(
+                    "ipgrep: {}: warning: recursive directory loop",
+                    path.display()
+                );
+                None
+            }
         } else {
             self.next_path_file(path)
         }
@@ -181,7 +200,7 @@ impl FileSourceIter {
         path: &PathBuf,
     ) -> Option<<Self as Iterator>::Item> {
         if self.recurse == RecurseHaystacks::No {
-            return Some(Err(format!("{}: is a directory", path.display())));
+            return Some(Err(format!("{}: Is a directory", path.display())));
         }
 
         match fs::read_dir(path) {
