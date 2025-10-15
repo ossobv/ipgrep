@@ -13,7 +13,11 @@ help:
 	  $$ipgrep --help
 
 rel:
-	cargo build --release
+	cargo auditable build --release
+	@objcopy --dump-section .dep-v0=/dev/stdout target/release/ipgrep | \
+	  python3 -c "$$(printf '%s\n' 'import zlib,sys' \
+	    'd=zlib.decompress(sys.stdin.buffer.read()).decode("utf-8")' \
+	    'print("(embedded SBOM) " + d[0:60] + "...")')"
 
 test:
 	cargo test
