@@ -216,12 +216,25 @@ mod tests {
 
     #[test]
     fn ipv4_vs_ipv6_is_false() {
-        // FIXME: match ::ffff:10.0.0.0/8 maybe?
-        let a = Net::try_from("10.0.0.0/8").unwrap();
-        let b = Net::try_from("2001:db8::/32").unwrap();
+        let a = Net::from_str_unchecked("10.0.0.0/8");
+        let b = Net::from_str_unchecked("2001:db8::/32");
         assert!(!MatchMode::Overlaps.matches(&a, &b));
         assert!(!MatchMode::Contains.matches(&a, &b));
         assert!(!MatchMode::Within.matches(&a, &b));
         assert!(!MatchMode::Equals.matches(&a, &b));
+    }
+
+    /// Disabled test that expects "::ffff:0:0/96" (v6) to equal "0.0.0.0/0".
+    /// Not sure if we want to keep this around.
+    #[test]
+    #[should_panic(expected = "\
+        assertion failed: MatchMode::Overlaps.matches(&a, &b)")]
+    fn ipv4_vs_ipv6_is_true() {
+        let a = Net::from_str_unchecked("10.0.0.0/8");
+        let b = Net::from_str_unchecked("::ffff:10.0.0.0/104");
+        assert!(MatchMode::Overlaps.matches(&a, &b));
+        assert!(MatchMode::Contains.matches(&a, &b));
+        assert!(MatchMode::Within.matches(&a, &b));
+        assert!(MatchMode::Equals.matches(&a, &b));
     }
 }

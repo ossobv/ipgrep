@@ -1,4 +1,4 @@
-use memchr::memchr2_iter;
+use memchr::{memchr_iter, memchr2_iter};
 
 use crate::matching::{AcceptSet, InterfaceMode};
 use crate::net::Net;
@@ -62,8 +62,15 @@ impl NetCandidateScanner {
     pub fn find_all(&self, buf: &[u8]) -> Vec<NetCandidate> {
         let mut candidates = Vec::new();
 
-        // This actually produces quite a speedup.
-        if !prefilter_could_be_ip(buf) {
+        // This actually produces quite a speedup for the /etc/* dataset
+        // of about 92ms to 40ms user time.
+        if !match (self.include_ipv4, self.include_ipv6) {
+            (true, true) => prefilter_could_be_ip(buf),
+            (true, false) => prefilter_could_be_ip4(buf),
+            (false, true) => prefilter_could_be_ip6(buf),
+            (false, false) => unreachable!(),
+        } {
+            // The empty list.
             return candidates;
         }
 
@@ -168,6 +175,48 @@ fn prefilter_could_be_ip(line: &[u8]) -> bool {
     false
 }
 
+#[inline]
+fn prefilter_could_be_ip4(line: &[u8]) -> bool {
+    // Check this, or we might fail at (line.len() - 1).
+    if line.is_empty() {
+        return false;
+    }
+
+    let maxpos = line.len() - 1;
+    let it = memchr_iter(b'.', line);
+    for pos in it {
+        // [0-9].[0-9] <-- could be IPv4
+        if pos < maxpos
+            && line[pos + 1].is_ascii_digit()
+            && pos > 0
+            && line[pos - 1].is_ascii_digit()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+#[inline]
+fn prefilter_could_be_ip6(line: &[u8]) -> bool {
+    // Check this, or we might fail at (line.len() - 1).
+    if line.is_empty() {
+        return false;
+    }
+
+    let maxpos = line.len() - 1;
+    let it = memchr_iter(b':', line);
+    for pos in it {
+        // :[0-9a-fA-F:] <-- could be IPv6
+        if pos < maxpos
+            && (line[pos + 1].is_ascii_hexdigit() || line[pos + 1] == b':')
+        {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,11 +239,11 @@ mod tests {
             vec![
                 NetCandidate {
                     range: (18, 33),
-                    net: Net::try_from("10.20.30.123").expect("no fail"),
+                    net: Net::from_str_unchecked("10.20.30.123"),
                 },
                 NetCandidate {
                     range: (34, 44),
-                    net: Net::try_from("10.20.30.1").expect("no fail"),
+                    net: Net::from_str_unchecked("10.20.30.1"),
                 },
             ]
         );
@@ -218,11 +267,11 @@ mod tests {
             vec![
                 NetCandidate {
                     range: (18, 33),
-                    net: Net::try_from("10.20.30.0/24").expect("no fail"),
+                    net: Net::from_str_unchecked("10.20.30.0/24"),
                 },
                 NetCandidate {
                     range: (34, 44),
-                    net: Net::try_from("10.20.30.1").expect("no fail"),
+                    net: Net::from_str_unchecked("10.20.30.1"),
                 },
             ]
         );
@@ -246,7 +295,7 @@ mod tests {
             res,
             vec![NetCandidate {
                 range: (34, 44),
-                net: Net::try_from("10.20.30.1").expect("no fail"),
+                net: Net::from_str_unchecked("10.20.30.1"),
             }]
         );
     }
