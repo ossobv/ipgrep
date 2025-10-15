@@ -10,8 +10,9 @@ pub struct AcceptSet {
     pub iface: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum InterfaceMode {
+    #[default]
     TreatAsIp,
     TreatAsNetwork,
     ComplainAndSkip,

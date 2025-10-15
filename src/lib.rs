@@ -1,10 +1,11 @@
 pub mod cli;
 pub mod core;
-pub mod files;
-pub mod matching;
-pub mod needle;
-pub mod net;
-pub mod netlike;
-pub mod output;
-pub mod params;
-pub mod scanner;
+
+mod files;
+mod matching;
+mod needle;
+mod net;
+mod netlike;
+mod output;
+mod params;
+mod scanner;

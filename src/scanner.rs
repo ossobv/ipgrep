@@ -10,31 +10,52 @@ pub struct NetCandidate {
     pub net: Net,
 }
 
-// FIXME: use builder pattern here too
 pub struct NetCandidateScanner {
+    // These could be relevant for the subparser:
     include_ipv4: bool,
     include_ipv6: bool,
     accept: AcceptSet,
+    // These is first relevant here after we've found the matches:
     interface_mode: InterfaceMode,
 }
 
 impl NetCandidateScanner {
-    pub fn new(
-        // These could be relevant for the subparser:
-        include_ipv4: bool,
-        include_ipv6: bool,
-        accept: AcceptSet,
-        // These is first relevant here after we've found the matches:
-        interface_mode: InterfaceMode,
-    ) -> Self {
-        if !include_ipv4 && !include_ipv6 {
+    pub fn new() -> Self {
+        Self {
+            include_ipv4: true,
+            include_ipv6: true,
+            accept: AcceptSet::default(),
+            interface_mode: InterfaceMode::default(),
+        }
+    }
+
+    pub fn ignore_ipv4(self, value: bool) -> Self {
+        if value && !self.include_ipv6 {
             panic!("no IPv4 or IPv6 needles supplied");
         }
         Self {
-            include_ipv4,
-            include_ipv6,
-            accept,
+            include_ipv4: !value,
+            ..self
+        }
+    }
+    pub fn ignore_ipv6(self, value: bool) -> Self {
+        if value && !self.include_ipv4 {
+            panic!("no IPv4 or IPv6 needles supplied");
+        }
+        Self {
+            include_ipv6: !value,
+            ..self
+        }
+    }
+
+    pub fn set_accept(self, accept: AcceptSet) -> Self {
+        Self { accept, ..self }
+    }
+
+    pub fn set_interface_mode(self, interface_mode: InterfaceMode) -> Self {
+        Self {
             interface_mode,
+            ..self
         }
     }
 
@@ -159,8 +180,9 @@ mod tests {
             oldnet: false,
             iface: true,
         };
-        let ncs =
-            NetCandidateScanner::new(true, true, acc, InterfaceMode::TreatAsIp);
+        let ncs = NetCandidateScanner::new()
+            .set_accept(acc)
+            .set_interface_mode(InterfaceMode::TreatAsIp);
         let res =
             ncs.find_all(b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"");
         assert_eq!(
@@ -186,12 +208,9 @@ mod tests {
             oldnet: false,
             iface: true,
         };
-        let ncs = NetCandidateScanner::new(
-            true,
-            true,
-            acc,
-            InterfaceMode::TreatAsNetwork,
-        );
+        let ncs = NetCandidateScanner::new()
+            .set_accept(acc)
+            .set_interface_mode(InterfaceMode::TreatAsNetwork);
         let res =
             ncs.find_all(b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"");
         assert_eq!(
@@ -217,12 +236,9 @@ mod tests {
             oldnet: false,
             iface: true,
         };
-        let ncs = NetCandidateScanner::new(
-            true,
-            true,
-            acc,
-            InterfaceMode::ComplainAndSkip,
-        );
+        let ncs = NetCandidateScanner::new()
+            .set_accept(acc)
+            .set_interface_mode(InterfaceMode::ComplainAndSkip);
         let res =
             ncs.find_all(b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"");
         // FIXME: where is the complaint logged?

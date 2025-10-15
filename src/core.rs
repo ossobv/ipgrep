@@ -54,16 +54,11 @@ pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
     };
 
     // Create scanner that knows what to expect.
-    let netcandidatescanner = {
-        let include_ipv4 = params.needles.iter().any(|n| n.net.is_ipv4());
-        let include_ipv6 = params.needles.iter().any(|n| n.net.is_ipv6());
-        scanner::NetCandidateScanner::new(
-            include_ipv4,
-            include_ipv6,
-            params.accept,
-            params.interface_mode,
-        )
-    };
+    let netcandidatescanner = scanner::NetCandidateScanner::new()
+        .ignore_ipv4(params.needles.iter().all(|n| !n.net.is_ipv4()))
+        .ignore_ipv6(params.needles.iter().all(|n| !n.net.is_ipv6()))
+        .set_accept(params.accept)
+        .set_interface_mode(params.interface_mode);
 
     // Create display that knows how to output.
     let disp = Display::new()
