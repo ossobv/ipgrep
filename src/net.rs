@@ -88,3 +88,58 @@ impl TryFrom<&[u8]> for Net {
         Net::try_from(s)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_v4_10_0_0_0_24() {
+        let n = Net::from_str_unchecked("10.0.0.0/24");
+        assert!(n.is_ipv4());
+        assert!(!n.is_ipv6());
+        assert!(!n.has_host_bits());
+        assert_eq!(n.clone().as_ip(), Net::from_str_unchecked("10.0.0.0/32"));
+        assert_eq!(n.clone().as_network(), n);
+    }
+
+    #[test]
+    fn test_v4_192_168_2_254_24() {
+        let n = Net::from_str_unchecked("192.168.2.254/24");
+        assert!(n.is_ipv4());
+        assert!(!n.is_ipv6());
+        assert!(n.has_host_bits());
+        assert_eq!(n.clone().as_ip(), Net::from_str_unchecked("192.168.2.254"));
+        assert_eq!(n.as_network(), Net::from_str_unchecked("192.168.2.0/24"));
+    }
+
+    #[test]
+    fn test_v6_fe80_1_64() {
+        let n = Net::from_str_unchecked("fe80::1/64");
+        assert!(!n.is_ipv4());
+        assert!(n.is_ipv6());
+        assert!(n.has_host_bits());
+        assert_eq!(n.clone().as_ip(), Net::from_str_unchecked("fe80::1"));
+        assert_eq!(n.as_network(), Net::from_str_unchecked("fe80::/64"));
+    }
+
+    #[test]
+    fn test_v6_0_24() {
+        let n = Net::from_str_unchecked("::/24");
+        assert!(!n.is_ipv4());
+        assert!(n.is_ipv6());
+        assert!(!n.has_host_bits());
+        assert_eq!(n.clone().as_ip(), Net::from_str_unchecked("::/128"));
+        assert_eq!(n.clone().as_network(), n);
+    }
+
+    #[test]
+    fn test_v6_2001_db8_29() {
+        let n = Net::from_str_unchecked("2001:db8::/29"); // "/28" has hostbits
+        assert!(!n.is_ipv4());
+        assert!(n.is_ipv6());
+        assert!(!n.has_host_bits());
+        assert_eq!(n.clone().as_ip(), Net::from_str_unchecked("2001:db8::"));
+        assert_eq!(n.clone().as_network(), n);
+    }
+}

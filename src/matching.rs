@@ -44,31 +44,33 @@ impl MatchMode {
             MatchMode::Equals => needle.0 == haystack.0,
 
             MatchMode::Contains => {
+                assert!(!needle.has_host_bits(), "{needle} has host bits");
                 haystack.0.contains(&needle.0.network())
                     && haystack.0.contains(&needle.0.broadcast())
             }
 
             MatchMode::Within => {
+                assert!(!haystack.has_host_bits(), "{haystack} has host bits");
                 needle.0.contains(&haystack.0.network())
                     && needle.0.contains(&haystack.0.broadcast())
             }
 
-            MatchMode::Overlaps => matchmode_overlaps(haystack, needle),
+            MatchMode::Overlaps => Self::overlaps(haystack, needle),
         }
     }
-}
 
-// Helper to determine overlap
-fn matchmode_overlaps(a: &Net, b: &Net) -> bool {
-    match (a.0, b.0) {
-        (IpNet::V4(a4), IpNet::V4(b4)) => {
-            a4.contains(&b4.network()) || b4.contains(&a4.network())
+    // Helper to determine overlap
+    fn overlaps(a: &Net, b: &Net) -> bool {
+        match (a.0, b.0) {
+            (IpNet::V4(a4), IpNet::V4(b4)) => {
+                a4.contains(&b4.network()) || b4.contains(&a4.network())
+            }
+            (IpNet::V6(a6), IpNet::V6(b6)) => {
+                a6.contains(&b6.network()) || b6.contains(&a6.network())
+            }
+            // TODO: do we need to do some ::ffff.1.2.3.4 IPv4 mapping checks?
+            _ => false,
         }
-        (IpNet::V6(a6), IpNet::V6(b6)) => {
-            a6.contains(&b6.network()) || b6.contains(&a6.network())
-        }
-        // TODO: do we need to do some ::ffff.1.2.3.4 IPv4 mapping checks?
-        _ => false,
     }
 }
 
@@ -78,8 +80,8 @@ mod tests {
 
     fn check(mode: MatchMode, cases: &[(&str, &str, bool)]) {
         for &(haystack, needle, expected) in cases {
-            let h = Net::try_from(haystack).unwrap();
-            let n = Net::try_from(needle).unwrap();
+            let h = Net::from_str_unchecked(haystack);
+            let n = Net::from_str_unchecked(needle);
             let got = mode.matches(&h, &n);
             let hint = match expected {
                 true => "should match",
@@ -108,6 +110,20 @@ mod tests {
     }
 
     #[test]
+    fn equals_v6() {
+        check(
+            MatchMode::Equals,
+            &[
+                ("::1/8", "0::1/8", true),
+                ("::1/128", "0:0:0:0:0:0:0:1/128", true),
+                ("::1/128", "0:0:0:0:0:0:0:1/127", false),
+                ("2001:db8::/32", "2001:db8::/32", true),
+                ("2001:db8::/64", "2001:db8::/64", true),
+            ],
+        );
+    }
+
+    #[test]
     fn contains_v4() {
         check(
             MatchMode::Contains,
@@ -120,6 +136,18 @@ mod tests {
                 ("192.168.3.3", "192.168.3.0/30", false),
                 ("1.2.3.4", "1.2.3.4", true),
                 ("1.2.3.4", "1.2.3.5", false),
+            ],
+        );
+    }
+
+    #[test]
+    fn contains_v6() {
+        check(
+            MatchMode::Contains,
+            &[
+                ("2001:db8:1::/32", "2001:db8::/33", true),
+                ("2001:db8:1::/32", "2001:db8::/32", true),
+                ("2001:db8:1::/32", "2001:db8::/31", false),
             ],
         );
     }
@@ -142,6 +170,20 @@ mod tests {
     }
 
     #[test]
+    fn within_v6() {
+        check(
+            MatchMode::Within,
+            &[
+                ("dead:beef:c0ff:ee00:dead:beef:c0ff:ee00", "::", false),
+                ("dead:beef:c0ff:ee00:dead:beef:c0ff:ee00", "::/0", true),
+                ("2001:db8:1::/50", "2001:db8:1::/49", true),
+                ("2001:db8:1::/49", "2001:db8:1::/49", true),
+                ("2001:db8:1::/48", "2001:db8:1::/49", false),
+            ],
+        );
+    }
+
+    #[test]
     fn overlaps_v4() {
         check(
             MatchMode::Overlaps,
@@ -159,6 +201,19 @@ mod tests {
     }
 
     #[test]
+    fn overlaps_v6() {
+        check(
+            MatchMode::Overlaps,
+            &[
+                ("::1", "::2", false),
+                ("2001:db8:1::/33", "2001:db8::/32", true),
+                ("2001:db8:1::/32", "2001:db8::/32", true),
+                ("2001:db8:1::/31", "2001:db8::/32", true),
+            ],
+        );
+    }
+
+    #[test]
     fn ipv4_vs_ipv6_is_false() {
         // FIXME: match ::ffff:10.0.0.0/8 maybe?
         let a = Net::try_from("10.0.0.0/8").unwrap();
@@ -167,19 +222,5 @@ mod tests {
         assert!(!MatchMode::Contains.matches(&a, &b));
         assert!(!MatchMode::Within.matches(&a, &b));
         assert!(!MatchMode::Equals.matches(&a, &b));
-    }
-
-    #[test]
-    fn equals_v6() {
-        let a = Net::try_from("2001:db8::/32").unwrap();
-        let b = Net::try_from("2001:db8::/32").unwrap();
-        assert!(MatchMode::Equals.matches(&a, &b));
-    }
-
-    #[test]
-    fn contains_v6() {
-        let hay = Net::try_from("2001:db8::/32").unwrap();
-        let needle = Net::try_from("2001:db8:1::/48").unwrap();
-        assert!(MatchMode::Contains.matches(&hay, &needle));
     }
 }
