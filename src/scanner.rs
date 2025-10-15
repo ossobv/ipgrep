@@ -59,7 +59,7 @@ impl NetCandidateScanner {
         }
     }
 
-    pub fn find_all(&self, buf: &[u8]) -> Vec<NetCandidate> {
+    pub fn find_all(&self, buf: &[u8], filename: &str) -> Vec<NetCandidate> {
         let mut candidates = Vec::new();
 
         // This actually produces quite a speedup for the /etc/* dataset
@@ -86,6 +86,7 @@ impl NetCandidateScanner {
             let slice = &buf[start..end];
 
             // Do we only want networks?
+            // FIXME: we should not ignore the networks, but only read the IP, right?
             if !self.accept.ip && !slice.contains(&b'/') {
                 continue;
             }
@@ -108,8 +109,10 @@ impl NetCandidateScanner {
                     InterfaceMode::TreatAsIp => net.as_ip(),
                     InterfaceMode::TreatAsNetwork => net.as_network(),
                     InterfaceMode::ComplainAndSkip => {
-                        // FIXME: complain and treat at IP? or..
-                        eprintln!("WARN: Ignoring host-bit-set net {net}");
+                        eprintln!(
+                            "ipgrep: {filename}: warning: \
+                             Ignoring network {net} with host bits set"
+                        );
                         continue;
                     }
                 }
@@ -117,7 +120,9 @@ impl NetCandidateScanner {
 
             // If we found an IP, check that we're doing Needle scans on those.
             if !self.include_ipv6 && net.is_ipv6() {
-                // FIXME: handle IPv4-in-IPv6 selection/cases? "::ffff:1.2.3.4"
+                // TODO: At one point, (re)consider whether we want to
+                // treat "::ffff.1.2.3.4/96" as IPv4 space or not. For
+                // now, we don't.
                 continue;
             }
             if !self.include_ipv4 && net.is_ipv4() {
@@ -232,8 +237,10 @@ mod tests {
         let ncs = NetCandidateScanner::new()
             .set_accept(acc)
             .set_interface_mode(InterfaceMode::TreatAsIp);
-        let res =
-            ncs.find_all(b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"");
+        let res = ncs.find_all(
+            b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"",
+            "(stdin)",
+        );
         assert_eq!(
             res,
             vec![
@@ -260,8 +267,10 @@ mod tests {
         let ncs = NetCandidateScanner::new()
             .set_accept(acc)
             .set_interface_mode(InterfaceMode::TreatAsNetwork);
-        let res =
-            ncs.find_all(b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"");
+        let res = ncs.find_all(
+            b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"",
+            "(stdin)",
+        );
         assert_eq!(
             res,
             vec![
@@ -288,9 +297,12 @@ mod tests {
         let ncs = NetCandidateScanner::new()
             .set_accept(acc)
             .set_interface_mode(InterfaceMode::ComplainAndSkip);
-        let res =
-            ncs.find_all(b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"");
-        // FIXME: where is the complaint logged?
+        let res = ncs.find_all(
+            b"  ipv4.address1: \"10.20.30.123/24,10.20.30.1\"",
+            "(stdin)",
+        );
+        // NOTE: A complaint is logged to stderr (and eaten by the
+        // test framework).
         assert_eq!(
             res,
             vec![NetCandidate {

@@ -143,7 +143,7 @@ fn search_in_file(
         };
         lineno += 1;
 
-        for candidate in netcandidatescanner.find_all(&line) {
+        for candidate in netcandidatescanner.find_all(&line, &file.name) {
             for needle in &params.needles {
                 if params.match_mode.matches(&candidate.net, &needle.net) {
                     matches.push(candidate);
