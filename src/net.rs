@@ -38,6 +38,11 @@ impl fmt::Display for Net {
 }
 
 impl Net {
+    pub fn from_str_unchecked(s: &str) -> Self {
+        Self::try_from(s)
+            .expect("Net::from_str_unchecked: static input must be valid")
+    }
+
     pub fn has_host_bits(&self) -> bool {
         self.0.network() != self.0.addr()
     }

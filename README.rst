@@ -23,7 +23,7 @@ Examples
     $ ip -br a | ipgrep 127.0.0.0/8 -m within
     lo               UNKNOWN        127.0.0.1/8 ::1/128
 
-*Find exact IPs matches*::
+*Find exact IP matches*::
 
     $ ip -br a | ipgrep 0:0:0:0:0:0:0:1 -m equals
     lo               UNKNOWN        127.0.0.1/8 ::1/128

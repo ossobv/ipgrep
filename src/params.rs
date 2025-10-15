@@ -19,7 +19,7 @@ pub struct Parameters {
     pub output_style: OutputStyle,
     // Output Line Prefix Control:
     pub hide_filename: bool,
-    pub show_line_number: bool,
+    pub show_lineno: bool,
     // Context Line Control:
     pub show_context: Context,
     // File and Directory Selection:

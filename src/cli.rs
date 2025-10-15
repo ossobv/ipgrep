@@ -262,7 +262,7 @@ impl Args {
             match_mode: self.match_mode.into(),
             output_style,
             hide_filename: self.no_filename,
-            show_line_number: self.line_number,
+            show_lineno: self.line_number,
             show_context: context,
             recursive,
             line_buffered: self.line_buffered,

@@ -66,8 +66,10 @@ pub fn run(params: &params::Parameters) -> Result<ExitCode, String> {
     };
 
     // Create display that knows how to output.
-    let display =
-        Display::new(show_filename, params.show_line_number, with_color);
+    let display = Display::new()
+        .show_filename(show_filename)
+        .show_lineno(params.show_lineno)
+        .show_color(with_color);
 
     let mut any_match = false;
 

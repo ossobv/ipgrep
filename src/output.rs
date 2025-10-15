@@ -2,10 +2,19 @@ use std::io::Write;
 
 use crate::scanner::NetCandidate;
 
+// From GNU grep 3 manual:
+//
+// GREP_COLORS=ms=01;31:mc=01;31:sl=:cx=:fn=35:ln=32:bn=32:se=36
+// ...
+// mt=01;31 ("match", "bold red")
+// fn=35 ("filename", "magenta")
+// ln=32 ("lineno", "green"), or bn=32 ("byte-offset", "green")
+// se=36 ("separator", "cyan")
+//
 const COLOR_MATCH: &str = "\x1b[1;31m"; // red <results>
-const COLOR_LINENO: &str = "\x1b[0;32m"; // green <number>
-const COLOR_DELIMITER: &str = "\x1b[0;36m"; // blue ":"/"-"
 const COLOR_FILENAME: &str = "\x1b[0;35m"; // purple <filename>
+const COLOR_LINENO: &str = "\x1b[0;32m"; // green <number>
+const COLOR_SEPARATOR: &str = "\x1b[0;36m"; // cyan ":"/"-"
 const COLOR_RESET: &str = "\x1b[0m";
 
 /// Output modes, in order of precedence
@@ -27,21 +36,37 @@ pub enum OutputStyle {
 
 pub struct Display {
     show_filename: bool,
-    show_line_number: bool,
-    with_color: bool,
+    show_lineno: bool,
+    show_color: bool,
 }
 
 impl Display {
-    pub fn new(
-        show_filename: bool,
-        show_line_number: bool,
-        with_color: bool,
-    ) -> Self {
-        // FIXME: change to builder pattern
+    pub fn new() -> Self {
         Self {
-            show_filename,
-            show_line_number,
-            with_color,
+            show_color: false,
+            show_filename: false,
+            show_lineno: false,
+        }
+    }
+
+    pub fn show_color(self, value: bool) -> Self {
+        Self {
+            show_color: value,
+            ..self
+        }
+    }
+
+    pub fn show_filename(self, value: bool) -> Self {
+        Self {
+            show_filename: value,
+            ..self
+        }
+    }
+
+    pub fn show_lineno(self, value: bool) -> Self {
+        Self {
+            show_lineno: value,
+            ..self
         }
     }
 
@@ -85,7 +110,7 @@ impl Display {
                 self.write_filename(writer, filename)?;
                 self.write_delimiter(writer, b":")?;
             }
-            if self.show_line_number {
+            if self.show_lineno {
                 self.write_linenumber(writer, lineno)?;
                 self.write_delimiter(writer, b":")?;
             }
@@ -107,11 +132,12 @@ impl Display {
         if self.show_filename {
             self.write_filename(writer, filename)?;
             self.write_delimiter(writer, b":")?;
-            self.write_no_color(writer)?;
         }
-        if self.show_line_number {
+        if self.show_lineno {
             self.write_linenumber(writer, lineno)?;
             self.write_delimiter(writer, b":")?;
+        }
+        if self.show_filename || self.show_lineno {
             self.write_no_color(writer)?;
         }
         self.write_line(writer, line, matches)?;
@@ -130,7 +156,7 @@ impl Display {
 
     #[inline]
     fn write_no_color(&self, writer: &mut dyn Write) -> std::io::Result<()> {
-        if self.with_color {
+        if self.show_color {
             writer.write_all(COLOR_RESET.as_bytes())?;
         }
         Ok(())
@@ -152,8 +178,8 @@ impl Display {
         writer: &mut dyn Write,
         delim: &[u8],
     ) -> std::io::Result<()> {
-        if self.with_color {
-            writer.write_all(COLOR_DELIMITER.as_bytes())?;
+        if self.show_color {
+            writer.write_all(COLOR_SEPARATOR.as_bytes())?;
         }
         writer.write_all(delim)?;
         Ok(())
@@ -165,7 +191,7 @@ impl Display {
         writer: &mut dyn Write,
         filename: &str,
     ) -> std::io::Result<()> {
-        if self.with_color {
+        if self.show_color {
             writer.write_all(COLOR_FILENAME.as_bytes())?;
         }
         writer.write_all(filename.as_bytes())?;
@@ -179,7 +205,7 @@ impl Display {
         line: &[u8],
         match_: &NetCandidate,
     ) -> std::io::Result<()> {
-        if self.with_color {
+        if self.show_color {
             writer.write_all(COLOR_MATCH.as_bytes())?;
         }
         let start = match_.range.0;
@@ -194,7 +220,7 @@ impl Display {
         writer: &mut dyn Write,
         lineno: usize,
     ) -> std::io::Result<()> {
-        if self.with_color {
+        if self.show_color {
             writer.write_all(COLOR_LINENO.as_bytes())?;
         }
         writer.write_all(format!("{lineno}").as_bytes())?;
@@ -208,7 +234,7 @@ impl Display {
         line: &[u8],
         matches: &Vec<NetCandidate>,
     ) -> std::io::Result<()> {
-        if self.with_color {
+        if self.show_color {
             let mut cursor = 0;
             for match_ in matches {
                 let start = match_.range.0;
@@ -235,5 +261,161 @@ impl Display {
             writer.write_all(line)?;
         }
         Ok(())
+    }
+}
+
+impl Default for Display {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use regex::Regex;
+
+    use crate::net::Net;
+
+    /// Helper that runs a test for both color modes and compares output.
+    fn check_display<F>(mut disp: Display, expected: &str, mut do_display: F)
+    where
+        F: FnMut(&mut Display, &mut Vec<u8>) -> std::io::Result<()>,
+    {
+        let re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+
+        for show_color in [false, true] {
+            disp = disp.show_color(show_color);
+
+            let mut output = Vec::new();
+            do_display(&mut disp, &mut output).expect("write failed");
+
+            let got = String::from_utf8(output).expect("utf8");
+
+            if show_color {
+                assert_eq!(got, expected, "mismatch (with color)");
+            } else {
+                let no_color = re.replace_all(expected, "").into_owned();
+                assert_eq!(got, no_color, "mismatch (no color)");
+            }
+        }
+    }
+
+    #[test]
+    fn display_print_filename() {
+        check_display(
+            Display::new(),
+            "\u{1b}[0;35m./path/to/example.txt\u{1b}[0m\n",
+            |d, o| d.print_filename(o, "./path/to/example.txt", b"\n"),
+        );
+    }
+
+    #[test]
+    fn display_print_filename_null() {
+        check_display(
+            Display::new(),
+            "\u{1b}[0;35mpath_with_NUL_at_EOL\u{1b}[0m\0",
+            |d, o| d.print_filename(o, "path_with_NUL_at_EOL", b"\0"),
+        );
+    }
+
+    #[test]
+    fn display_print_counts_no_filename() {
+        check_display(Display::new(), "42\n", |d, o| {
+            d.print_counts(o, "filename not shown", 42)
+        });
+    }
+
+    #[test]
+    fn display_print_counts_with_filename() {
+        check_display(
+            Display::new().show_filename(true),
+            "\u{1b}[0;35mfilename is shown\u{1b}[0;36m:\u{1b}[0m43\n",
+            |d, o| d.print_counts(o, "filename is shown", 43),
+        );
+    }
+
+    #[test]
+    fn display_print_matches() {
+        let line = b"nets: 10.20.30.1-10.20.30.20 <--\n";
+        let matches = vec![
+            NetCandidate {
+                range: (6, 16),
+                net: Net::from_str_unchecked("10.20.30.1"),
+            },
+            NetCandidate {
+                range: (17, 28),
+                net: Net::from_str_unchecked("10.20.30.20"),
+            },
+        ];
+        check_display(
+            Display::new(),
+            "\u{1b}[1;31m10.20.30.1\u{1b}[0m\n\
+             \u{1b}[1;31m10.20.30.20\u{1b}[0m\n",
+            |d, o| d.print_matches(o, "fn", 351, line, &matches),
+        );
+        check_display(
+            Display::new().show_filename(true),
+            "\u{1b}[0;35mfn\u{1b}[0;36m:\u{1b}[1;31m10.20.30.1\u{1b}[0m\n\
+             \u{1b}[0;35mfn\u{1b}[0;36m:\u{1b}[1;31m10.20.30.20\u{1b}[0m\n",
+            |d, o| d.print_matches(o, "fn", 352, line, &matches),
+        );
+        check_display(
+            Display::new().show_lineno(true),
+            "\u{1b}[0;32m353\u{1b}[0;36m:\u{1b}[1;31m10.20.30.1\u{1b}[0m\n\
+             \u{1b}[0;32m353\u{1b}[0;36m:\u{1b}[1;31m10.20.30.20\u{1b}[0m\n",
+            |d, o| d.print_matches(o, "fn", 353, line, &matches),
+        );
+        check_display(
+            Display::new().show_filename(true).show_lineno(true),
+            "\u{1b}[0;35mfn\u{1b}[0;36m:\u{1b}[0;32m354\u{1b}[0;36m\
+             :\u{1b}[1;31m10.20.30.1\u{1b}[0m\n\
+             \u{1b}[0;35mfn\u{1b}[0;36m:\u{1b}[0;32m354\u{1b}[0;36m\
+             :\u{1b}[1;31m10.20.30.20\u{1b}[0m\n",
+            |d, o| d.print_matches(o, "fn", 354, line, &matches),
+        );
+    }
+
+    #[test]
+    fn display_print_line() {
+        let line = b"/::ffff.1.2.3.4/255.255.0.0/\n";
+        let matches = vec![
+            NetCandidate {
+                range: (1, 15),
+                net: Net::from_str_unchecked("::ffff:1.2.3.4"),
+            },
+            NetCandidate {
+                range: (16, 27),
+                net: Net::from_str_unchecked("255.255.0.0"),
+            },
+        ];
+        check_display(
+            Display::new(),
+            "/\u{1b}[1;31m::ffff.1.2.3.4\u{1b}[0m\
+             /\u{1b}[1;31m255.255.0.0\u{1b}[0m/\n",
+            |d, o| d.print_line(o, "fn", 1231, line, &matches),
+        );
+        check_display(
+            Display::new().show_filename(true),
+            "\u{1b}[0;35msome_fn\u{1b}[0;36m:\u{1b}[0m\
+             /\u{1b}[1;31m::ffff.1.2.3.4\u{1b}[0m\
+             /\u{1b}[1;31m255.255.0.0\u{1b}[0m/\n",
+            |d, o| d.print_line(o, "some_fn", 1232, line, &matches),
+        );
+        check_display(
+            Display::new().show_lineno(true),
+            "\u{1b}[0;32m1233\u{1b}[0;36m:\u{1b}[0m\
+             /\u{1b}[1;31m::ffff.1.2.3.4\u{1b}[0m\
+             /\u{1b}[1;31m255.255.0.0\u{1b}[0m/\n",
+            |d, o| d.print_line(o, "some_fn", 1233, line, &matches),
+        );
+        check_display(
+            Display::new().show_filename(true).show_lineno(true),
+            "\u{1b}[0;35msome_fn\u{1b}[0;36m:\
+             \u{1b}[0;32m1234\u{1b}[0;36m:\u{1b}[0m\
+             /\u{1b}[1;31m::ffff.1.2.3.4\u{1b}[0m\
+             /\u{1b}[1;31m255.255.0.0\u{1b}[0m/\n",
+            |d, o| d.print_line(o, "some_fn", 1234, line, &matches),
+        );
     }
 }
