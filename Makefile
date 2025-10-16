@@ -23,15 +23,7 @@ release:
 	# The debian releases get a version without the "v"-prefix.
 	GIT_VERSION=$$(git describe --always --dirty=-modified) && \
 	  ./build-docker.sh "$${GIT_VERSION#v}"
-	git describe --always --dirty=-modified
-
-deb: release
-	# The debian releases get a version without the "v"-prefix.
-	GIT_VERSION=$$(git describe --always --dirty=-modified) && \
-	  ./ipgrep --version | grep -x "ipgrep $${GIT_VERSION#v}" && \
-	  grep "^$${GIT_VERSION#v} (" CHANGES.rst
-	cargo deb
-
+	./ipgrep --version
 
 test:
 	cargo test

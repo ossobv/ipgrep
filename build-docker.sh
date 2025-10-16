@@ -23,4 +23,3 @@ if test -z "$layertar"; then
     echo "$0: could not parse docker layout to extract output" >&2
 fi
 tar -xvf "$layertar"
-ls -l ./ipgrep

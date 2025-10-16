@@ -1,6 +1,7 @@
 *
 
 !Cargo.*
+!LICENSE
 !Makefile
 !rustfmt.toml
 !*.rst
