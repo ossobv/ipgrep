@@ -1,0 +1,8 @@
+*
+
+!Cargo.*
+!Makefile
+!rustfmt.toml
+!*.rst
+
+!src/*.rs

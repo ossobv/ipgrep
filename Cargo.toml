@@ -1,7 +1,11 @@
 [package]
 name = "ipgrep"
-version = "0.1.0"
+description = "ipgrep searches for IP addresses in CIDRs"
+version = "0.1.0-wip"
 edition = "2024"
+
+[features]
+version-from-env = []
 
 [dependencies]
 clap = { version = "4", features = ["derive", "wrap_help"] }
@@ -11,3 +15,38 @@ ipnet = "2"
 
 [dev-dependencies]
 regex = "1"
+
+[build-dependencies]
+#cargo-auditable = "0"
+#cargo-deb = "3"
+
+[profile.release]
+# Non-scientific test said that the following options made things worse:
+# opt-level="s"/"z"; lto=true; codegen-units=1
+# A static musl build was also less performant that the glibc-linked version:
+# - glibc: user 0m3.240s
+# - musl:  user 0m3.564s
+# - glibc: sys  0m0.396s
+# - musl:  sys  0m0.576s
+# But the advantage of the static build (works "everywhere") is overwhelming.
+strip = true        # Automatically strip symbols from the binary
+
+[package.metadata.deb]
+maintainer = "Walter Doekes <wjdoekes+ipgrep@osso.nl>"
+suggests = "ipcalc"
+extended-description = """
+'ipgrep' is a utility to search for IP addresses or networks in text files.
+It has various match modes to find bigger networks by IPs, or to find IPs
+by supplied networks.
+"""
+changelog = "CHANGES.rst"
+depends = ""
+license-file = "LICENSE"
+section = "utils"
+priority = "optional"
+assets = [
+    # 'cargo deb' "thinks" it's using its own build in ./target/release/ipgrep
+    # but we're using the output from 'make release'.
+    ["ipgrep", "usr/bin/", "755"],
+    ["README.rst", "usr/share/doc/ipgrep/", "644"],
+]

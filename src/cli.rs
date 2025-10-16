@@ -8,6 +8,9 @@ use crate::params::{
     RecurseHaystacks, ShowContext,
 };
 
+#[cfg(feature = "version-from-env")]
+const GIT_VERSION: &str = env!("GIT_VERSION");
+#[cfg(not(feature = "version-from-env"))]
 const GIT_VERSION: &str = git_version::git_version!();
 
 #[derive(Clone, ValueEnum, Debug)]
@@ -207,7 +210,7 @@ Match mode:
     pub recursive: bool,
 
     /// Read all files under each directory, while dereferencing
-    /// symlinks to directories
+    /// found symlinks
     #[arg(
         short = 'R',
         long = "dereference-recursive",

@@ -45,21 +45,9 @@ Examples
     ff02::2 ip6-allrouters
 
 
------------------
-Things left to do
------------------
-
-- Remove/fix TODOs
-- Create first release and publish here
-- Update this README, now that the "clap" help looks slightly different
-- Add TODO for manual color-enable/disable
-- Probably refactor some stuff because it's not up to Rust standards
-- Think how we can release this easily (.deb? .pip? vcutil?)
-
-
---------------
-Original usage
---------------
+-----
+Usage
+-----
 
 The following help was created before any development was done::
 
@@ -80,49 +68,49 @@ The following help was created before any development was done::
     The options follow (closely mimicking grep options).
 
     Generic Program Information:
-      --help                     Output a usage message and exit
-      -V, --version              Print version and exit
+      --help                    Output a usage message and exit
+      -V, --version             Print version and exit
 
     Matching Control:
-      -a, --accept <MODE>        Accept input forms (may repeat or use commas):
-                                   ip     - bare host IP
-                                   net    - valid network (CIDR)
-                                   oldnet - valid network (host/dotted-netmask)
-                                   iface  - interface IP (host/mask)
-                                   [default: ip,net,iface]
-      -I, --interface-mode       Select interface IP matching mode (default: ip):
-                                   ip       - treat as single IP
-                                   net      - treat as if network bits were unset
-                                   complain - complain/reject network bits
-      -m, --match <TYPE>         Match mode (default: contains):
-                                   contains - haystack net contains needle net
-                                   within   - needle net contains haystack net
-                                   equals   - exact IP or network equality
-                                   overlaps - haystack and needle nets overlap
+      -a, --accept <MODE>       Accept input forms (may repeat or use commas):
+                                  ip     - bare host IP
+                                  net    - valid network (CIDR)
+                                  oldnet - valid network (host/dotted-netmask)
+                                  iface  - interface IP (host/mask)
+                                  [default: ip,net,iface]
+      -I, --interface-mode      Select interface IP matching mode (default: ip):
+                                  ip       - treat as single IP
+                                  net      - treat as if network bits were unset
+                                  complain - complain/reject network bits
+      -m, --match <TYPE>        Match mode (default: contains):
+                                  contains - haystack net contains needle net
+                                  within   - needle net contains haystack net
+                                  equals   - exact IP or network equality
+                                  overlaps - haystack and needle nets overlap
 
     General Output Control:
-      -c, --count                Print only a count of matching items
-      -l, --files-with-matches   List filenames with matches only
-      -o, --only-matching        Print only the matching IPs/networks
-      -q, --quiet                Quiet; exit status only
+      -c, --count               Print only a count of matching items
+      -l, --files-with-matches  List filenames with matches only
+      -o, --only-matching       Print only the matching IPs/networks
+      -q, --quiet               Quiet; exit status only
 
     Output Line Prefix Control:
-      -h, --no-filename          Suppress filename prefix on output
-      -n, --line-number          Prefix each output line (or item) with lineno
-      -Z, --null                 Output a zero byte instead of LF in output;
-                                 only useful in combination with -l
+      -h, --no-filename         Suppress filename prefix on output
+      -n, --line-number         Prefix each output line (or item) with lineno
+      -Z, --null                Output a zero byte instead of LF in output;
+                                only useful in combination with -l
 
     Context Line Control:
-      -A NUM, --after-context=NUM    Print NUM context lines before a match
-      -B NUM, --before-context=NUM   Print NUM context lines after a match
-      -C NUM, --context=NUM          Shorthand for -A NUM -B NUM
+      -A NUM, --after-context=NUM   Print NUM context lines before a match
+      -B NUM, --before-context=NUM  Print NUM context lines after a match
+      -C NUM, --context=NUM         Shorthand for -A NUM -B NUM
 
     File and Directory Selection:
-      -r, --recursive            Read all files under each directory, recursively
-      -R, --dereference-recursive
+      -r, --recursive               Read files under each directory, recursively
+      -R, --dereference-recursive   Dereference symlinks while doing so
 
     Other Options:
-      --line-buffered            Disable output buffering when writing to non-tty
+      --line-buffered           Disable output buffering when writing to non-tty
 
     Exit status:
       0 if match found
@@ -145,6 +133,15 @@ License
 -------
 
 GPLv3+
+
+
+-----------------
+Things left to do
+-----------------
+
+- Maybe make colored output option. Right now you can always disable it
+  by piping to ``cat``.
+- There are a few *TODOs* in the source to tackle. Not a big priority.
 
 
 .. |EXAMPLE| image:: assets/example.png
