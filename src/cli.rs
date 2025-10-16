@@ -4,8 +4,8 @@ use clap::error::ErrorKind;
 use clap::{ArgAction, Error, Parser, ValueEnum};
 
 use crate::params::{
-    AcceptSet, Context, InterfaceMode, MatchMode, Needle, OutputStyle,
-    Parameters, RecurseHaystacks,
+    AcceptSet, InterfaceMode, MatchMode, Needle, OutputStyle, Parameters,
+    RecurseHaystacks, ShowContext,
 };
 
 const GIT_VERSION: &str = git_version::git_version!();
@@ -254,9 +254,9 @@ impl Args {
     /// Convert CLI args to internal parameters
     pub fn into_parameters(self) -> Parameters {
         // Take these first before we make self partial.
-        let context = self.make_context();
-        let recursive = self.make_recursive();
         let output_style = self.make_output_style();
+        let show_context = self.make_show_context();
+        let recursive = self.make_recursive();
 
         Parameters {
             accept: self.accept.into(),
@@ -265,7 +265,7 @@ impl Args {
             output_style,
             hide_filename: self.no_filename,
             show_lineno: self.line_number,
-            show_context: context,
+            show_context,
             recursive,
             line_buffered: self.line_buffered,
             needles: self.needles.into(),
@@ -273,8 +273,35 @@ impl Args {
         }
     }
 
-    fn make_context(&self) -> Context {
-        let mut context = Context::default();
+    // GNU grep (3.11) has these output modes:
+    // "-q/--quiet" shows nothing;
+    // "-l/--files-with-matches" only shows files;
+    // "-c/--count" shows files with counts (not a grand total);
+    // "-o/--only-matching" shows the matches;
+    // -q trumps -l, -l trumps -c, -c trumps -o.
+    fn make_output_style(&self) -> OutputStyle {
+        if self.quiet {
+            // -q/--quiet
+            OutputStyle::JustExitCode
+        } else if self.files_with_matches && self.null {
+            // -l/--file-with-matches, -Z/--null
+            OutputStyle::ShowFilesWithNull
+        } else if self.files_with_matches {
+            // -l/--file-with-matches
+            OutputStyle::ShowFilesWithLf
+        } else if self.count {
+            // -c/--count
+            OutputStyle::ShowCountsPerFile
+        } else if self.only_matching {
+            // -o/--only-matching
+            OutputStyle::ShowOnlyMatching
+        } else {
+            OutputStyle::ShowLinesAndContext
+        }
+    }
+
+    fn make_show_context(&self) -> ShowContext {
+        let mut context = ShowContext::default();
         if let Some(value) = self.context {
             if self.before_context.is_some() || self.after_context.is_some() {
                 Error::raw(ErrorKind::ArgumentConflict, ERR_CONTEXT_CONFLICT)
@@ -305,33 +332,6 @@ impl Args {
             RecurseHaystacks::FollowDirectories
         } else {
             RecurseHaystacks::No
-        }
-    }
-
-    // GNU grep (3.11) has these output modes:
-    // "-q/--quiet" shows nothing;
-    // "-l/--files-with-matches" only shows files;
-    // "-c/--count" shows files with counts (not a grand total);
-    // "-o/--only-matching" shows the matches;
-    // -q trumps -l, -l trumps -c, -c trumps -o.
-    fn make_output_style(&self) -> OutputStyle {
-        if self.quiet {
-            // -q/--quiet
-            OutputStyle::JustExitCode
-        } else if self.files_with_matches && self.null {
-            // -l/--file-with-matches, -Z/--null
-            OutputStyle::ShowFilesWithNull
-        } else if self.files_with_matches {
-            // -l/--file-with-matches
-            OutputStyle::ShowFilesWithLf
-        } else if self.count {
-            // -c/--count
-            OutputStyle::ShowCountsPerFile
-        } else if self.only_matching {
-            // -o/--only-matching
-            OutputStyle::ShowOnlyMatching
-        } else {
-            OutputStyle::ShowLinesAndContext
         }
     }
 }

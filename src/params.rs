@@ -1,13 +1,8 @@
+pub use crate::context::ShowContext; // re-export
 pub use crate::files::RecurseHaystacks; // re-export
 pub use crate::matching::{AcceptSet, InterfaceMode, MatchMode}; // re-export
 pub use crate::needle::Needle; // re-export
 pub use crate::output::OutputStyle; // re-export
-
-#[derive(Debug, Default)]
-pub struct Context {
-    pub before: usize,
-    pub after: usize,
-}
 
 #[derive(Debug)]
 pub struct Parameters {
@@ -21,7 +16,7 @@ pub struct Parameters {
     pub hide_filename: bool,
     pub show_lineno: bool,
     // Context Line Control:
-    pub show_context: Context,
+    pub show_context: ShowContext,
     // File and Directory Selection:
     pub recursive: RecurseHaystacks,
     // Other Options:

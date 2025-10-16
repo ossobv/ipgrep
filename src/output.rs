@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{self, Write};
 
 use crate::scanner::NetCandidate;
 
@@ -18,7 +18,7 @@ const COLOR_SEPARATOR: &str = "\x1b[0;36m"; // cyan ":"/"-"
 const COLOR_RESET: &str = "\x1b[0m";
 
 /// Output modes, in order of precedence
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum OutputStyle {
     // Only exit with status
     JustExitCode,
@@ -75,7 +75,7 @@ impl Display {
         writer: &mut dyn Write,
         filename: &str,
         end: &[u8],
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         self.write_filename(writer, filename)?;
         self.write_no_color(writer)?;
         self.write(writer, end)?;
@@ -87,10 +87,10 @@ impl Display {
         writer: &mut dyn Write,
         filename: &str,
         count: usize,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_filename {
             self.write_filename(writer, filename)?;
-            self.write_delimiter(writer, b":")?;
+            self.write_separator(writer, b":")?;
             self.write_no_color(writer)?;
         }
         self.write_count(writer, count)?;
@@ -104,20 +104,53 @@ impl Display {
         lineno: usize,
         line: &[u8],
         matches: &Vec<NetCandidate>,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         for match_ in matches {
             if self.show_filename {
                 self.write_filename(writer, filename)?;
-                self.write_delimiter(writer, b":")?;
+                self.write_separator(writer, b":")?;
             }
             if self.show_lineno {
                 self.write_linenumber(writer, lineno)?;
-                self.write_delimiter(writer, b":")?;
+                self.write_separator(writer, b":")?;
             }
             self.write_match(writer, line, match_)?;
             self.write_no_color(writer)?;
             self.write(writer, b"\n")?;
         }
+        Ok(())
+    }
+
+    pub fn print_context(
+        &self,
+        writer: &mut dyn Write,
+        filename: &str,
+        lineno: usize,
+        line: &[u8],
+    ) -> io::Result<()> {
+        if self.show_filename {
+            self.write_filename(writer, filename)?;
+            self.write_separator(writer, b"-")?;
+        }
+        if self.show_lineno {
+            self.write_linenumber(writer, lineno)?;
+            self.write_separator(writer, b"-")?;
+        }
+        if self.show_filename || self.show_lineno {
+            self.write_no_color(writer)?;
+        }
+        self.write(writer, line)?;
+        Ok(())
+    }
+
+    pub fn print_context_delimiter(
+        &self,
+        writer: &mut dyn Write,
+        _filename: &str,
+        _lineno: usize,
+    ) -> io::Result<()> {
+        self.write_separator(writer, b"--\n")?; // delimiter "--"
+        self.write_no_color(writer)?;
         Ok(())
     }
 
@@ -128,14 +161,14 @@ impl Display {
         lineno: usize,
         line: &[u8],
         matches: &Vec<NetCandidate>,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_filename {
             self.write_filename(writer, filename)?;
-            self.write_delimiter(writer, b":")?;
+            self.write_separator(writer, b":")?;
         }
         if self.show_lineno {
             self.write_linenumber(writer, lineno)?;
-            self.write_delimiter(writer, b":")?;
+            self.write_separator(writer, b":")?;
         }
         if self.show_filename || self.show_lineno {
             self.write_no_color(writer)?;
@@ -145,17 +178,13 @@ impl Display {
     }
 
     #[inline]
-    fn write(
-        &self,
-        writer: &mut dyn Write,
-        value: &[u8],
-    ) -> std::io::Result<()> {
+    fn write(&self, writer: &mut dyn Write, value: &[u8]) -> io::Result<()> {
         writer.write_all(value)?;
         Ok(())
     }
 
     #[inline]
-    fn write_no_color(&self, writer: &mut dyn Write) -> std::io::Result<()> {
+    fn write_no_color(&self, writer: &mut dyn Write) -> io::Result<()> {
         if self.show_color {
             writer.write_all(COLOR_RESET.as_bytes())?;
         }
@@ -167,17 +196,17 @@ impl Display {
         &self,
         writer: &mut dyn Write,
         count: usize,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         writer.write_all(format!("{count}\n").as_bytes())?;
         Ok(())
     }
 
     #[inline]
-    fn write_delimiter(
+    fn write_separator(
         &self,
         writer: &mut dyn Write,
         delim: &[u8],
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_color {
             writer.write_all(COLOR_SEPARATOR.as_bytes())?;
         }
@@ -190,7 +219,7 @@ impl Display {
         &self,
         writer: &mut dyn Write,
         filename: &str,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_color {
             writer.write_all(COLOR_FILENAME.as_bytes())?;
         }
@@ -204,7 +233,7 @@ impl Display {
         writer: &mut dyn Write,
         line: &[u8],
         match_: &NetCandidate,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_color {
             writer.write_all(COLOR_MATCH.as_bytes())?;
         }
@@ -219,7 +248,7 @@ impl Display {
         &self,
         writer: &mut dyn Write,
         lineno: usize,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_color {
             writer.write_all(COLOR_LINENO.as_bytes())?;
         }
@@ -233,7 +262,7 @@ impl Display {
         writer: &mut dyn Write,
         line: &[u8],
         matches: &Vec<NetCandidate>,
-    ) -> std::io::Result<()> {
+    ) -> io::Result<()> {
         if self.show_color {
             let mut cursor = 0;
             for match_ in matches {
@@ -280,7 +309,7 @@ mod tests {
     /// Helper that runs a test for both color modes and compares output.
     fn check_display<F>(mut disp: Display, expected: &str, mut do_display: F)
     where
-        F: FnMut(&mut Display, &mut Vec<u8>) -> std::io::Result<()>,
+        F: FnMut(&mut Display, &mut Vec<u8>) -> io::Result<()>,
     {
         let re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
 
@@ -373,6 +402,49 @@ mod tests {
              \u{1b}[0;35mfn\u{1b}[0;36m:\u{1b}[0;32m354\u{1b}[0;36m\
              :\u{1b}[1;31m10.20.30.20\u{1b}[0m\n",
             |d, o| d.print_matches(o, "fn", 354, line, &matches),
+        );
+    }
+
+    #[test]
+    fn display_print_context() {
+        let line = b"whatever context\n";
+        check_display(Display::new(), "whatever context\n", |d, o| {
+            d.print_context(o, "fn", 1231, line)
+        });
+        check_display(
+            Display::new().show_filename(true),
+            "\u{1b}[0;35mfnX\u{1b}[0;36m-\u{1b}[0mwhatever context\n",
+            |d, o| d.print_context(o, "fnX", 1232, line),
+        );
+        check_display(
+            Display::new().show_lineno(true),
+            "\u{1b}[0;32m1233\u{1b}[0;36m-\u{1b}[0mwhatever context\n",
+            |d, o| d.print_context(o, "fnY", 1233, line),
+        );
+        check_display(
+            Display::new().show_filename(true).show_lineno(true),
+            "\u{1b}[0;35mfnZ\u{1b}[0;36m-\u{1b}[0;32m1234\
+             \u{1b}[0;36m-\u{1b}[0mwhatever context\n",
+            |d, o| d.print_context(o, "fnZ", 1234, line),
+        );
+    }
+
+    #[test]
+    fn display_print_context_delimiter() {
+        const DELIM: &str = "\u{1b}[0;36m--\n\u{1b}[0m";
+        check_display(Display::new(), DELIM, |d, o| {
+            d.print_context_delimiter(o, "unused0", 11)
+        });
+        check_display(Display::new().show_filename(true), DELIM, |d, o| {
+            d.print_context_delimiter(o, "unused1", 12)
+        });
+        check_display(Display::new().show_lineno(true), DELIM, |d, o| {
+            d.print_context_delimiter(o, "unused2", 13)
+        });
+        check_display(
+            Display::new().show_filename(true).show_lineno(true),
+            DELIM,
+            |d, o| d.print_context_delimiter(o, "unused3", 14),
         );
     }
 

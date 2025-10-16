@@ -1,6 +1,7 @@
 use std::io::{self, BufRead, BufWriter, IsTerminal, LineWriter, Write};
 use std::process::ExitCode;
 
+use crate::context::ContextBuffer;
 use crate::files;
 use crate::output::{Display, OutputStyle};
 use crate::params;
@@ -19,12 +20,6 @@ pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
     // FIXME: check for incomplete functionality
     if params.accept.oldnet {
         panic!("AcceptSet.oldnet is not really supported yet");
-    }
-    if params.show_context.before != 0 {
-        panic!("Context.before is not really supported yet");
-    }
-    if params.show_context.after != 0 {
-        panic!("Context.after is not really supported yet");
     }
 
     // GNU grep 3 compatibility:
@@ -130,6 +125,8 @@ fn search_in_file(
     let mut matches = Vec::new();
     let mut match_count: usize = 0;
 
+    let mut context = ContextBuffer::from_show_context(&params.show_context);
+
     loop {
         // TODO: This could use some test case. But it looks like it
         // works, even including files without trailing newlines.
@@ -154,7 +151,20 @@ fn search_in_file(
             }
         }
 
-        if !matches.is_empty() {
+        if matches.is_empty() {
+            if context.is_used() {
+                if context.should_print_after_line() {
+                    assert_eq!(
+                        params.output_style,
+                        OutputStyle::ShowLinesAndContext
+                    );
+                    disp.print_context(writer, &file.name, lineno, &line)?;
+                    context.update_last_printed(lineno);
+                } else {
+                    context.push_before_line(lineno, &line);
+                }
+            }
+        } else {
             match_count += matches.len();
 
             match params.output_style {
@@ -168,20 +178,54 @@ fn search_in_file(
                 }
                 OutputStyle::ShowCountsPerFile => {}
                 OutputStyle::ShowOnlyMatching => {
+                    // TODO: GNU grep 3 behaviour is kind of peculiar when
+                    // using -o and context. The -C context decides if "--"
+                    // delimiters will be shown or not: for -C3 you'll
+                    // get a delimiter if there is more than three lines
+                    // between the matches.
+                    // Do we want to implement this? Seems like an
+                    // implementation detail, and not something useful.
                     disp.print_matches(
                         writer, &file.name, lineno, &line, &matches,
                     )?;
                 }
                 OutputStyle::ShowLinesAndContext => {
-                    // FIXME: add the missing context
+                    if context.is_used() {
+                        // Print delimiter ("--")?
+                        if context.is_new_match_block(lineno) {
+                            disp.print_context_delimiter(
+                                writer,
+                                &file.name,
+                                lineno - 1,
+                            )?;
+                        }
+                        // Print before-lines?
+                        for (c_lineno, c_line) in context.get_before_lines() {
+                            disp.print_context(
+                                writer, &file.name, *c_lineno, c_line,
+                            )?;
+                        }
+                        context.clear_before_lines();
+                    }
+
+                    // Print the line with the matches.
                     disp.print_line(
                         writer, &file.name, lineno, &line, &matches,
                     )?;
+
+                    if context.is_used() {
+                        // Record that we might need to print
+                        // after-lines in the future. And keep track of
+                        // what we printed, for the context-delimiter.
+                        context.request_after();
+                        context.update_last_printed(lineno);
+                    }
                 }
             }
 
             matches.clear();
         }
+
         line.clear();
     }
 

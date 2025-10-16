@@ -21,3 +21,14 @@ rel:
 
 test:
 	cargo test
+	input=$$(printf '%s\n' \
+	  1 2 '3 192.168.1.1' 4 5 6 '7 192.168.1.1' \
+	  '8 192.168.1.2' '9 192.168.1.1' 10 11 12 \
+	  1 2 '3 192.168.1.1' 4 5 6 '7 192.168.1.1' \
+	  '8 192.168.1.2' '9 192.168.1.1' 10 11 12) && \
+	grep_out=$$(echo "$$input" | \
+	  grep 192.168.1.1 -C1 -n /dev/stdin /dev/null) && \
+	ipgrep_out=$$(echo "$$input" | \
+	  ./target/debug/ipgrep 192.168.1.1 -C1 -n /dev/stdin /dev/null) && \
+	grep_out=$$grep_out ipgrep_out=$$ipgrep_out bash -c \
+	  'diff -pu <(echo "$$grep_out") <(echo "$$ipgrep_out")'

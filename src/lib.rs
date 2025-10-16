@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod core;
 
+mod context;
 mod files;
 mod matching;
 mod needle;

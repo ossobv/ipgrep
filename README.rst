@@ -54,8 +54,6 @@ Things left to do
 - Remove/fix TODOs
 - Add LICENSE file
 - Create first release and publish here
-- Add (a lot) more test cases for various components
-- Add -A/-B/-C context support
 - Update this README, now that the "clap" help looks slightly different
 - Add TODO for manual color-enable/disable
 - Probably refactor some stuff because it's not up to Rust standards
