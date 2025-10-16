@@ -17,11 +17,6 @@ pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
             .add_files(&params.haystack_filenames)
     };
 
-    // FIXME: check for incomplete functionality
-    if params.accept.oldnet {
-        panic!("AcceptSet.oldnet is not really supported yet");
-    }
-
     // GNU grep 3 compatibility:
     // - by default, no filename is shown;
     // - for more than one file (including recursion), we show;

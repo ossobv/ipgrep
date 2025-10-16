@@ -49,6 +49,7 @@ impl NetCandidateScanner {
     }
 
     pub fn set_accept(self, accept: AcceptSet) -> Self {
+        assert!(accept.ip || accept.net || accept.oldnet || accept.iface);
         Self { accept, ..self }
     }
 
@@ -74,25 +75,40 @@ impl NetCandidateScanner {
             return candidates;
         }
 
-        // FIXME: maybe pass !(accept.ip || accept.net || accept.iface)
-        // here too, so we can skip all "/"-matching in that case.
         let netlikescanner = if self.accept.oldnet {
-            NetLikeScanner::new(buf).with_oldnet(true)
+            NetLikeScanner::new(buf).with_oldnet()
         } else {
             NetLikeScanner::new(buf)
         };
+        let nonet =
+            !(self.accept.net || self.accept.oldnet || self.accept.iface);
 
         for (start, end) in netlikescanner {
-            let slice = &buf[start..end];
+            let mut slice = &buf[start..end];
 
-            // Do we only want networks?
-            // FIXME: we should not ignore the networks, but only read the IP, right?
-            if !self.accept.ip && !slice.contains(&b'/') {
-                continue;
+            // Restrict based on IP or not-IP.
+            match slice.iter().position(|&b| b == b'/') {
+                Some(slash_pos) => {
+                    // If there is a slash and we don't want networks.
+                    // Go to IP mode immediately.
+                    if nonet {
+                        slice = &slice[0..slash_pos];
+                    } else if self.accept.oldnet && !self.accept.net {
+                        // iface without net normally implies net. If there
+                        // is oldnet, we will only accept full old-style
+                        // masks.
+                        if !slice[slash_pos..].contains(&b'.') {
+                            continue;
+                        }
+                    }
+                }
+                None => {
+                    // There is no slash. Do we only want networks? Then skip.
+                    if !self.accept.ip {
+                        continue;
+                    }
+                }
             }
-
-            // FIXME: do something with self.accept.oldnet here:
-            // IpNet::with_netmask(ip, mask)
 
             let mut net = match Net::try_from(slice) {
                 Ok(s) => s,
@@ -309,6 +325,128 @@ mod tests {
                 range: (34, 44),
                 net: Net::from_str_unchecked("10.20.30.1"),
             }]
+        );
+    }
+
+    #[test]
+    fn test_accept_only_ip() {
+        let acc = AcceptSet {
+            ip: true,
+            net: false,
+            oldnet: false,
+            iface: false,
+        };
+        let ncs = NetCandidateScanner::new().set_accept(acc);
+        let res = ncs.find_all(b"x-11.22.0.0/16-x-12.34.56.78/24-x", "(stdin)");
+        assert_eq!(
+            res,
+            vec![
+                NetCandidate {
+                    range: (2, 14),
+                    net: Net::from_str_unchecked("11.22.0.0"),
+                },
+                NetCandidate {
+                    range: (17, 31),
+                    net: Net::from_str_unchecked("12.34.56.78"),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_accept_only_net() {
+        let acc = AcceptSet {
+            ip: false,
+            net: true,
+            oldnet: false,
+            iface: false,
+        };
+        let ncs = NetCandidateScanner::new().set_accept(acc);
+
+        // 11.22.0.0 is not a net
+        // 12.34.56.78/24 is an interface
+        let res = ncs.find_all(b"x-11.22.0.0-x-12.34.56.78/24-x", "(stdin)");
+        assert_eq!(res, vec![]);
+
+        let res = ncs.find_all(b"x-0.0.0.0/0-x-12.34.0.0/24-x", "(stdin)");
+        assert_eq!(
+            res,
+            vec![
+                NetCandidate {
+                    range: (2, 11),
+                    net: Net::from_str_unchecked("0.0.0.0/0"),
+                },
+                NetCandidate {
+                    range: (14, 26),
+                    net: Net::from_str_unchecked("12.34.0.0/24"),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_accept_only_oldnet_without_iface() {
+        let acc = AcceptSet {
+            ip: false,
+            net: false,
+            oldnet: true,
+            iface: false, // relevant for net or oldnet
+        };
+        let ncs = NetCandidateScanner::new().set_accept(acc);
+
+        let res = ncs.find_all(
+            b"0.0.0.0/0     # no, a cidr \
+              12.34.56.0/24 # no, a cidr \
+              72.62.52.1    # no, an ip \
+              3.3.3.3/8     # no, an iface \
+              4.4.0.0/255.255.0.0  # yes, oldnet net \
+              3.3.3.3/255.255.0.0  # no, oldnet iface \
+              123.45.123.45 # no, another ip for good measure",
+            "(stdin)",
+        );
+        assert_eq!(
+            res,
+            vec![NetCandidate {
+                range: (109, 128),
+                net: Net::from_str_unchecked("4.4.0.0/16"),
+            },]
+        );
+    }
+
+    #[test]
+    fn test_accept_only_oldnet_with_iface() {
+        let acc = AcceptSet {
+            ip: false,
+            net: false,
+            oldnet: true,
+            iface: true, // relevant for net or oldnet
+        };
+        let ncs = NetCandidateScanner::new()
+            .set_accept(acc)
+            .set_interface_mode(InterfaceMode::TreatAsNetwork);
+
+        let res = ncs.find_all(
+            b"0.0.0.0/0     # no, a cidr \
+              12.34.56.0/24 # no, a cidr \
+              72.62.52.1    # no, an ip \
+              3.3.3.3/8     # no, an iface \
+              4.4.0.0/255.255.0.0  # yes, oldnet net \
+              3.3.3.3/255.255.0.0  # yes, oldnet iface \
+              123.45.123.45 # no, another ip for good measure",
+            "(stdin)",
+        );
+        assert_eq!(
+            res,
+            vec![
+                NetCandidate {
+                    range: (109, 128),
+                    net: Net::from_str_unchecked("4.4.0.0/16"),
+                },
+                NetCandidate {
+                    range: (148, 167),
+                    net: Net::from_str_unchecked("3.3.0.0/16"),
+                },
+            ]
         );
     }
 }

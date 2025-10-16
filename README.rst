@@ -49,8 +49,6 @@ Examples
 Things left to do
 -----------------
 
-- Check/refactor the netlike.rs ugly FSM beast, and maybe rename some files
-- Fix oldnet support
 - Remove/fix FIXMEs
 - Remove/fix TODOs
 - Add LICENSE file

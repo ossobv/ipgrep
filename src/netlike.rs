@@ -1,9 +1,15 @@
 //!! NOTE: This file contains AI-generated code that has not been scrutinized.
 
+#[derive(PartialEq)]
+enum NetLikeRestriction {
+    IpsAndCidrs,
+    AlsoOldNets,
+}
+
 pub struct NetLikeScanner<'a> {
     buf: &'a [u8],
     pos: usize,
-    oldnet: bool,
+    restrict: NetLikeRestriction,
 }
 
 impl<'a> NetLikeScanner<'a> {
@@ -11,14 +17,16 @@ impl<'a> NetLikeScanner<'a> {
         Self {
             buf,
             pos: 0,
-            oldnet: false,
+            restrict: NetLikeRestriction::IpsAndCidrs,
         }
     }
 
     /// Enables recognition of "old style" masks like 128.128.0.0/255.255.0.0.
-    pub fn with_oldnet(mut self, oldnet: bool) -> Self {
-        self.oldnet = oldnet;
-        self
+    pub fn with_oldnet(self) -> Self {
+        Self {
+            restrict: NetLikeRestriction::AlsoOldNets,
+            ..self
+        }
     }
 }
 
@@ -32,14 +40,13 @@ impl Iterator for NetLikeScanner<'_> {
 
         while i < len {
             let b = bytes[i];
-            let start_candidate =
-                matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b':');
+            let start_candidate = is_hexdigit_or_colon(b);
 
             if !start_candidate {
                 i += 1;
                 continue;
             }
-            if i > 0 && is_ascii_alnum(bytes[i - 1]) {
+            if i > 0 && is_alnum(bytes[i - 1]) {
                 i += 1;
                 continue;
             }
@@ -63,10 +70,6 @@ impl Iterator for NetLikeScanner<'_> {
             while i < len {
                 match bytes[i] {
                     b'0'..=b'9' => {
-                        if seen_slash {
-                            // post
-                        } else { /* pre */
-                        }
                         i += 1;
                     }
                     b'a'..=b'f' | b'A'..=b'F' => {
@@ -111,7 +114,7 @@ impl Iterator for NetLikeScanner<'_> {
 
             // Embedded-in-word guard: if char after run is alnum,
             // reject (we're inside a word)
-            if end < len && is_ascii_alnum(bytes[end]) {
+            if end < len && is_alnum(bytes[end]) {
                 self.pos = end;
                 continue;
             }
@@ -224,7 +227,7 @@ impl Iterator for NetLikeScanner<'_> {
 
                 // Case A: oldnet enabled -> allow dotted-mask after
                 // slash
-                if self.oldnet {
+                if self.restrict == NetLikeRestriction::AlsoOldNets {
                     let post_looks_like_dotted_ipv4 = !post_has_hex
                         && post_has_dot
                         && post_dots == 3
@@ -312,32 +315,28 @@ impl Iterator for NetLikeScanner<'_> {
     }
 }
 
-fn is_ascii_alnum(b: u8) -> bool {
+fn is_alnum(b: u8) -> bool {
     b.is_ascii_digit() || b.is_ascii_lowercase() || b.is_ascii_uppercase()
 }
 
-fn is_ascii_whitespace(b: u8) -> bool {
+fn is_hexdigit_or_colon(b: u8) -> bool {
+    matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b':')
+}
+
+fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\r' | b'\n' | 0x0B | 0x0C)
 }
 
 /// ASCII punctuation we consider safe delimiters (trim trailing '.' /
 /// ':' when followed by these)
+#[rustfmt::skip]
 fn is_delim_punct(b: u8) -> bool {
     // typical punctuation that can follow an IP in text: space, comma,
     // semicolon, parentheses, etc.
-    is_ascii_whitespace(b)
-        || matches!(
-            b,
-            b',' | b';'
-                | b')'
-                | b'('
-                | b']'
-                | b'['
-                | b'<'
-                | b'>'
-                | b'\"'
-                | b'\''
-        )
+    is_whitespace(b) || matches!(
+        b,
+        b',' | b';' | b')' | b'(' | b']' | b'[' | b'<' | b'>' | b'\"' | b'\''
+    )
 }
 
 #[cfg(test)]
@@ -413,7 +412,7 @@ mod tests {
                 .map(|(s, e)| str::from_utf8(&input[s..e]).unwrap().to_string())
                 .collect();
             let got_with_oldnet: Vec<_> = NetLikeScanner::new(input)
-                .with_oldnet(true)
+                .with_oldnet()
                 .map(|(s, e)| str::from_utf8(&input[s..e]).unwrap().to_string())
                 .collect();
 
