@@ -7,6 +7,8 @@ Search IP addresses and networks in text files.
 IP-CIDR. The match-mode decides whether your CIDR is contained-in or
 containing the haystack.*
 
+|EXAMPLE|
+
 
 --------
 Examples
@@ -47,7 +49,6 @@ Examples
 Things left to do
 -----------------
 
-- Improve README, showing examples (with color?)
 - Check/refactor the netlike.rs ugly FSM beast, and maybe rename some files
 - Fix oldnet support
 - Remove/fix FIXMEs
@@ -138,3 +139,10 @@ The following help was created before any development was done::
 
       # Output linefeed separated IPs of all IPv4 hosts/interfaces.
       ipgrep -m within -o 0.0.0.0/0 input.txt
+
+It's slightly more readable/concise than the Rust clap output.
+See ``ipgrep --help`` for the actual output, which should be 100% compatible.
+
+
+.. |EXAMPLE| image:: assets/example.png
+    :alt: CLI output of ipcalc piped to ipgrep showing IP CIDR match with color
