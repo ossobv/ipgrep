@@ -24,7 +24,7 @@ pub enum MatchMode {
     Contains,
     Within,
     Overlaps,
-    // FIXME(future): touches? 10.0.10.0/24 <-> 10.0.11.0/24
+    // TODO: Does anyone want "Touches" for 10.0.10.0/24 <-> 10.0.11.0/24?
 }
 
 impl fmt::Display for MatchMode {

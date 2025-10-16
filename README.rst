@@ -49,9 +49,7 @@ Examples
 Things left to do
 -----------------
 
-- Remove/fix FIXMEs
 - Remove/fix TODOs
-- Add LICENSE file
 - Create first release and publish here
 - Update this README, now that the "clap" help looks slightly different
 - Add TODO for manual color-enable/disable
@@ -115,9 +113,9 @@ The following help was created before any development was done::
                                  only useful in combination with -l
 
     Context Line Control:
-      -A NUM, --after-context=NUM
-      -B NUM, --before-context=NUM
-      -C NUM, -NUM, --context=NUM
+      -A NUM, --after-context=NUM    Print NUM context lines before a match
+      -B NUM, --before-context=NUM   Print NUM context lines after a match
+      -C NUM, --context=NUM          Shorthand for -A NUM -B NUM
 
     File and Directory Selection:
       -r, --recursive            Read all files under each directory, recursively
@@ -140,6 +138,13 @@ The following help was created before any development was done::
 
 It's slightly more readable/concise than the Rust clap output.
 See ``ipgrep --help`` for the actual output, which should be 100% compatible.
+
+
+-------
+License
+-------
+
+GPLv3+
 
 
 .. |EXAMPLE| image:: assets/example.png
