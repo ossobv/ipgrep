@@ -44,18 +44,29 @@ RUN cargo auditable build --locked --features=version-from-env \
 RUN test "$(echo $(ldd target/x86_64-unknown-linux-musl/release/ipgrep))" = "statically linked"
 
 # Record build tools in build-info.json, move relevant files to target/docker/.
-RUN mkdir -p target/docker/ && \
+RUN set -u && mkdir -p target/docker/ && \
+    RELEASE_DATE=$(sed -e "/^$GIT_VERSION (/"'!d;s/^[^(]*(//;s/)$//' \
+      CHANGES.rst) && \
+    RELEASE_EPOCH=$(TZ=UTC date -d "$RELEASE_DATE" +%s) && \
+    cp -a /src/ipgrep/target/x86_64-unknown-linux-musl/release/ipgrep target/docker/ && \
     printf '%s\n' >target/docker/build-info.json \
       '{' \
-      "  \"cargo\": \"$(cargo --version)\"," \
-      "  \"cargo-auditable\": \"$(cargo auditable --version)\"," \
-      "  \"cargo-deb\": \"$(cargo deb --version)\"," \
-      "  \"rustc\": \"$(rustc --version)\"" \
+      "  \"CARGO_BUILD_TARGET\": \"$CARGO_BUILD_TARGET\"," \
+      "  \"RELEASE_DATE\": \"$RELEASE_DATE\"," \
+      "  \"RELEASE_EPOCH\": \"$RELEASE_EPOCH\"," \
+      "  \"cargo\": \"$(cargo --version --verbose | tr '\n' '|' | sed -e '$s/|$//;s/|/\\n/g')\"," \
+      "  \"cargo-auditable\": \"$(cargo auditable --version --verbose | tr '\n' '|' | sed -e '$s/|$//;s/|/\\n/g')\"," \
+      "  \"cargo-deb\": \"$(cargo deb --version --verbose | tr '\n' '|' | sed -e '$s/|$//;s/|/\\n/g')\"," \
+      "  \"ipgrep\": \"$(./target/docker/ipgrep --version)\"," \
+      "  \"rustc\": \"$(rustc --version --verbose | tr '\n' '|' | sed -e '$s/|$//;s/|/\\n/g')\"" \
       '}' && \
-    cp -a /src/ipgrep/target/x86_64-unknown-linux-musl/release/ipgrep target/docker/ && \
-    true
-RUN grep "^${GIT_VERSION#v} (" CHANGES.rst
-RUN cargo deb --no-build -o target/docker/
+    cat target/docker/build-info.json && \
+    if test "$(date -d "@$RELEASE_EPOCH" '+%Y-%m-%d')" != "$RELEASE_DATE" || \
+            test "$RELEASE_EPOCH" = "0"; then \
+        echo "invalid release date: Check '$GIT_VERSION' in CHANGES.rst" >&2; \
+        exit 1; \
+    fi && \
+    SOURCE_DATE_EPOCH=$RELEASE_EPOCH cargo deb --no-build -o target/docker/
 
 FROM scratch
 COPY --from=builder /src/ipgrep/target/docker/* /
