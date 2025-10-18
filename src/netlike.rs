@@ -1,6 +1,6 @@
-//!! NOTE: This file contains AI-generated code that has not been scrutinized.
+use memchr::memchr;
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 enum NetLikeRestriction {
     IpsAndCidrs,
     AlsoOldNets,
@@ -11,6 +11,8 @@ pub struct NetLikeScanner<'a> {
     pos: usize,
     restrict: NetLikeRestriction,
 }
+
+const IPV46_START: &[u8; 23] = b"0123456789abcdefABCDEF:";
 
 impl<'a> NetLikeScanner<'a> {
     pub fn new(buf: &'a [u8]) -> Self {
@@ -28,315 +30,395 @@ impl<'a> NetLikeScanner<'a> {
             ..self
         }
     }
+
+    #[inline]
+    fn next_impl(&mut self) -> Option<(usize, usize)> {
+        let bytes = self.buf;
+        let len = bytes.len(); // self.pos can be beyond
+
+        // Shortest IPv4 is 7 ("1.1.1.1").
+        let leftover = len.saturating_sub(self.pos);
+        if leftover < 7 {
+            while self.pos < len {
+                if matches!(
+                    bytes[self.pos],
+                    b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b':')
+                {
+                    return self.try_ipv6();
+                }
+                self.pos += 1;
+            }
+            return None;
+        }
+
+        // Leftover is >=7
+        let len_minus_6 = len - 6;
+        while self.pos < len_minus_6 {
+            let b = bytes[self.pos];
+            if self.pos == 0 || bytes[self.pos - 1] != b':' {
+                if let Some(idx) = memchr(b, IPV46_START) {
+                    if idx < 10 {
+                        // 0..9
+                        if let Some(res) = self.try_ipv4_or_ipv6() {
+                            return Some(res);
+                        }
+                        // Retry loop now that self.pos is increased.
+                        continue;
+                    } else if idx < 22 || bytes[self.pos + 1] == b':' {
+                        // a..fA..F || (':' && nextchar is ':')
+                        if let Some(res) = self.try_ipv6() {
+                            return Some(res);
+                        }
+                        // Retry loop now that self.pos is increased.
+                        continue;
+                    }
+                }
+            } else if b.is_ascii_digit() {
+                // 0..9
+                if let Some(res) = self.try_ipv4() {
+                    return Some(res);
+                }
+                // Retry loop now that self.pos is increased.
+                continue;
+            }
+            self.pos += 1;
+        }
+
+        // Leftover is <7
+        self.try_ipv6()
+    }
+
+    #[inline]
+    fn seek_to_non_digit(&mut self, start: usize) -> Option<(usize, usize)> {
+        let bytes = self.buf;
+        let len = bytes.len();
+        let mut i = start;
+
+        while i < len {
+            if !bytes[i].is_ascii_digit() {
+                break;
+            }
+            i += 1;
+        }
+        self.pos = i + 1;
+        None
+    }
+
+    #[inline]
+    fn seek_to_non_digit_period(
+        &mut self,
+        start: usize,
+    ) -> Option<(usize, usize)> {
+        let bytes = self.buf;
+        let len = bytes.len();
+        let mut i = start;
+
+        while i < len {
+            if !matches!(bytes[i], b'0'..=b'9' | b'.') {
+                break;
+            }
+            i += 1;
+        }
+        self.pos = i + 1;
+        None
+    }
+
+    #[inline]
+    fn seek_to_non_letter(&mut self, start: usize) -> Option<(usize, usize)> {
+        let bytes = self.buf;
+        let len = bytes.len();
+        let mut i = start;
+
+        while i < len {
+            if !bytes[i].is_ascii_alphabetic() {
+                break;
+            }
+            i += 1;
+        }
+        self.pos = i + 1;
+        None
+    }
+
+    #[inline]
+    fn maybe_netmask(
+        &mut self,
+        end: usize,
+        restrict: NetLikeRestriction,
+    ) -> Option<(usize, usize)> {
+        let bytes = self.buf;
+        let len = bytes.len();
+        let start = self.pos;
+        let mut i = end;
+
+        let mut numdigits = 0;
+
+        while i < len {
+            if !bytes[i].is_ascii_digit() {
+                break;
+            }
+            numdigits += 1;
+            i += 1;
+            if numdigits > 3 {
+                break;
+            }
+        }
+
+        // 0 digits or more than 3; then this is not a netmask.
+        if numdigits == 0 || numdigits > 3 {
+            self.pos = end;
+            return Some((start, end - 1));
+        }
+
+        // 1..3 digits en then period and then a number? could be old
+        // style netmask.
+        if i + 1 < len && bytes[i] == b'.' && bytes[i + 1].is_ascii_digit() {
+            match restrict {
+                // Don't accept old style? Go back and return the IP.
+                NetLikeRestriction::IpsAndCidrs => {
+                    self.pos = end;
+                    return Some((start, end - 1));
+                }
+                // Slurp all the digits and dots and then return it if
+                // it's a valid IP. Always put pos beyond that.
+                NetLikeRestriction::AlsoOldNets => {
+                    let mut valid = false;
+                    let mut dots = 1;
+                    numdigits = 0;
+                    i += 1;
+                    while i < len {
+                        match bytes[i] {
+                            b'0'..=b'9' => {
+                                numdigits += 1;
+                                if dots == 3 {
+                                    valid = true;
+                                }
+                            }
+                            b'.' => {
+                                if numdigits > 3 {
+                                    valid = false;
+                                } else if numdigits == 0 {
+                                    break;
+                                } else {
+                                    numdigits = 0;
+                                    dots += 1;
+                                }
+                            }
+                            _ => {
+                                break;
+                            }
+                        }
+                        i += 1;
+                    }
+                    // Update pos in either case.
+                    self.pos = i + 1;
+                    if valid {
+                        return Some((start, i));
+                    } else {
+                        return Some((start, end - 1));
+                    }
+                }
+            }
+        }
+
+        self.pos = i + 1;
+        Some((start, i))
+    }
+
+    #[inline]
+    fn try_ipv4(&mut self) -> Option<(usize, usize)> {
+        // We have at least 7 chars and the first token is 0..9.
+        let bytes = self.buf;
+        let len = bytes.len();
+        let start = self.pos;
+
+        let mut dots = 0;
+        let mut numsize = 1; // starting with digit
+        let mut end = start + 1;
+
+        while end < len {
+            match bytes[end] {
+                b'0'..=b'9' => {
+                    numsize += 1;
+                    if numsize > 3 {
+                        return self.seek_to_non_digit(end + 1);
+                    }
+                }
+                b'.' => {
+                    if numsize == 0 {
+                        self.pos = end;
+                        return None;
+                    }
+                    numsize = 0;
+                    dots += 1;
+                    if dots == 3 {
+                        end += 1;
+                        break;
+                    }
+                }
+                _ => {
+                    self.pos = end;
+                    return None;
+                }
+            }
+            end += 1;
+        }
+
+        // Fourth digit.
+        while end < len {
+            if !bytes[end].is_ascii_digit() {
+                break;
+            }
+            numsize += 1;
+            if numsize > 3 {
+                return self.seek_to_non_digit(end + 1);
+            }
+            end += 1;
+        }
+
+        // Easy case.
+        if end == len {
+            self.pos = end;
+            return Some((start, end));
+        }
+
+        // Check for legal endings.
+        match bytes[end] {
+            b'/' => {
+                return self.maybe_netmask(end + 1, self.restrict);
+            }
+            b'a'..=b'z' | b'A'..=b'Z' => {
+                // Reject all the matches.
+                return self.seek_to_non_letter(end + 1);
+            }
+            b'.' => {
+                // Address stops being legal if we get another octet
+                // after the fourth.
+                // ["1.2.3.4".] <- legal
+                // ["1.2.3.4.5"] <- illegal
+                if end + 1 < len && bytes[end + 1].is_ascii_digit() {
+                    return self.seek_to_non_digit_period(end + 1);
+                }
+            }
+            _ => {}
+        }
+
+        self.pos = end + 1;
+        Some((start, end))
+    }
+
+    #[inline]
+    fn try_ipv6(&mut self) -> Option<(usize, usize)> {
+        // Unsure how many characters we have, but ldelim is not ':'.
+        let bytes = self.buf;
+        let len = bytes.len();
+        let start = self.pos;
+        let mut end = start;
+        let mut colons = 0;
+
+        while end < len {
+            match bytes[end] {
+                b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
+                b':' => {
+                    colons += 1;
+                }
+                b'.' => {
+                    if start + 7 < len
+                        && !(bytes[start] == b':'
+                            && bytes[start + 1] == b':'
+                            && matches!(bytes[start + 2], b'f' | b'F')
+                            && matches!(bytes[start + 3], b'f' | b'F')
+                            && matches!(bytes[start + 4], b'f' | b'F')
+                            && matches!(bytes[start + 5], b'f' | b'F')
+                            && bytes[start + 6] == b':')
+                    {
+                        self.pos = end + 1;
+                        return Some((start, end));
+                    }
+                }
+                b'/' => {
+                    if colons >= 2 {
+                        return self.maybe_netmask(
+                            end + 1,
+                            NetLikeRestriction::IpsAndCidrs,
+                        );
+                    } else {
+                        self.pos = end + 1;
+                        return None;
+                    }
+                }
+                b'g'..=b'z' | b'G'..=b'Z' => {
+                    break;
+                }
+                _ => {
+                    if colons >= 2 {
+                        self.pos = end + 1;
+                        return Some((start, end));
+                    }
+                    break;
+                }
+            }
+            end += 1;
+        }
+
+        self.pos = end + 1;
+        None
+    }
+
+    #[inline]
+    fn try_ipv4_or_ipv6(&mut self) -> Option<(usize, usize)> {
+        // We have at least 7 chars and the first token is 0..9.
+        let bytes = self.buf;
+        //
+        // Second digit.
+        match bytes[self.pos + 1] {
+            b'0'..=b'9' => {
+                // undecided
+            }
+            b'a'..=b'f' | b'A'..=b'F' | b':' => {
+                return self.try_ipv6();
+            }
+            b'.' => {
+                return self.try_ipv4();
+            }
+            _ => {
+                self.pos += 2;
+                return None;
+            }
+        }
+        // Third digit.
+        match bytes[self.pos + 2] {
+            b'0'..=b'9' => {
+                // undecided
+            }
+            b'a'..=b'f' | b'A'..=b'F' | b':' => {
+                return self.try_ipv6();
+            }
+            b'.' => {
+                return self.try_ipv4();
+            }
+            _ => {
+                self.pos += 3;
+                return None;
+            }
+        }
+        // Fourth digit.
+        match bytes[self.pos + 3] {
+            b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b':' => self.try_ipv6(),
+            b'.' => self.try_ipv4(),
+            _ => {
+                self.pos += 4;
+                None
+            }
+        }
+    }
 }
 
 impl Iterator for NetLikeScanner<'_> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let bytes = self.buf;
-        let len = bytes.len();
-        let mut i = self.pos;
-
-        while i < len {
-            let b = bytes[i];
-            let start_candidate = is_hexdigit_or_colon(b);
-
-            if !start_candidate {
-                i += 1;
-                continue;
-            }
-            if i > 0 && is_alnum(bytes[i - 1]) {
-                i += 1;
-                continue;
-            }
-
-            let start = i;
-            i += 1;
-
-            // pre-slash stats
-            let mut pre_dots: u8 = if b == b'.' { 1 } else { 0 };
-            let mut pre_colons: u8 = if b == b':' { 1 } else { 0 };
-            let mut pre_has_hex = matches!(b, b'a'..=b'f' | b'A'..=b'F');
-
-            // post-slash stats (only used after we see a slash)
-            let mut post_dots: usize = 0;
-            let mut post_colons: usize = 0;
-            let mut post_has_hex = false;
-
-            let mut seen_slash = false;
-            let mut slash_pos: Option<usize> = None;
-
-            while i < len {
-                match bytes[i] {
-                    b'0'..=b'9' => {
-                        i += 1;
-                    }
-                    b'a'..=b'f' | b'A'..=b'F' => {
-                        if seen_slash {
-                            post_has_hex = true;
-                        } else {
-                            pre_has_hex = true;
-                        }
-                        i += 1;
-                    }
-                    b'.' => {
-                        if seen_slash {
-                            post_dots += 1;
-                        } else {
-                            pre_dots += 1;
-                        }
-                        i += 1;
-                    }
-                    b':' => {
-                        if seen_slash {
-                            post_colons += 1;
-                        } else {
-                            pre_colons += 1;
-                        }
-                        i += 1;
-                    }
-                    b'/' => {
-                        if !seen_slash {
-                            seen_slash = true;
-                            slash_pos = Some(i);
-                        } else {
-                            // second slash -- keep consuming but treat
-                            // as part of post
-                        }
-                        i += 1;
-                    }
-                    _ => break,
-                }
-            }
-
-            let mut end = i;
-
-            // Embedded-in-word guard: if char after run is alnum,
-            // reject (we're inside a word)
-            if end < len && is_alnum(bytes[end]) {
-                self.pos = end;
-                continue;
-            }
-
-            // Trim trailing '.' or ':' characters IF they are followed
-            // by a delimiter.
-            while end > start {
-                let last = bytes[end - 1];
-                if last == b'.' || last == b':' {
-                    let next_after_last = bytes.get(end);
-                    if next_after_last.is_none_or(|nb| is_delim_punct(*nb)) {
-                        end -= 1;
-                        // adjust pre/post counts when trimming
-                        if let Some(slash_idx) = slash_pos {
-                            if end - 1 < slash_idx {
-                                // trimming happened in pre
-                                if last == b'.' {
-                                    pre_dots = pre_dots.saturating_sub(1);
-                                }
-                                if last == b':' {
-                                    pre_colons = pre_colons.saturating_sub(1);
-                                }
-                            } else {
-                                // trimming happened in post
-                                if last == b'.' {
-                                    post_dots = post_dots.saturating_sub(1);
-                                }
-                                if last == b':' {
-                                    post_colons = post_colons.saturating_sub(1);
-                                }
-                            }
-                        } else {
-                            // no slash seen: trimming in pre
-                            if last == b'.' {
-                                pre_dots = pre_dots.saturating_sub(1);
-                            }
-                            if last == b':' {
-                                pre_colons = pre_colons.saturating_sub(1);
-                            }
-                        }
-                        continue;
-                    }
-                }
-                break;
-            }
-
-            // advance scanner position to after the maximal run we
-            // consumed; final decisions below
-            self.pos = i;
-
-            // minimal length guard
-            if end - start < 2 {
-                continue;
-            }
-
-            // Split the logic into two cases: no slash seen, or slash seen.
-            if !seen_slash {
-                // No slash: previous logic (per-part)
-                // reject runs that mix hex letters and dots without any
-                // colon (can't be IPv4 or IPv6)
-                if pre_has_hex && pre_dots > 0 && pre_colons == 0 {
-                    continue;
-                }
-                // IPv4-like: more than 3 dots is invalid
-                if pre_colons == 0 && pre_dots > 3 {
-                    continue;
-                }
-                // Reject tokens ending with a single '.' or ':' that we
-                // didn't trim (defensive)
-                if end > start {
-                    let last = bytes[end - 1];
-                    if last == b'.' || last == b':' {
-                        continue;
-                    }
-                }
-                return Some((start, end));
-            } else {
-                // Slash was present; decide based on oldnet flag and
-                // per-part stats
-                let slash_idx = slash_pos.unwrap();
-
-                // compute slices for pre and post as seen inside the run
-                // pre: start..slash_idx
-                // post: (slash_idx+1)..end
-                let post_len = end.saturating_sub(slash_idx + 1);
-
-                // If post is empty-ish, reject (something like "1.2./")
-                if post_len == 0 {
-                    continue;
-                }
-
-                // Helper checks:
-                let post_starts_digit = bytes[slash_idx + 1].is_ascii_digit();
-                let post_has_dot = post_dots > 0;
-                let post_has_colon = post_colons > 0;
-                let post_has_hex = post_has_hex;
-
-                let pre_valid_for_ip = {
-                    // pre part must look like either an IPv4-ish or
-                    // IPv6-ish fragment:
-                    if pre_colons == 0 {
-                        // IPv4-ish: dots <= 3 and doesn't mix hex+dot
-                        !(pre_has_hex && pre_dots > 0) && pre_dots <= 3
-                    } else {
-                        // IPv6-ish: allow anything with colons (defer
-                        // deeper validation)
-                        true
-                    }
-                };
-
-                // Case A: oldnet enabled -> allow dotted-mask after
-                // slash
-                if self.restrict == NetLikeRestriction::AlsoOldNets {
-                    let post_looks_like_dotted_ipv4 = !post_has_hex
-                        && post_has_dot
-                        && post_dots == 3
-                        && post_colons == 0;
-                    let post_looks_like_ip =
-                        post_has_dot || post_has_colon || post_has_hex;
-                    let post_looks_like_number = {
-                        // all digits?
-                        let mut all_digits = true;
-                        for b in bytes.iter().take(end).skip(slash_idx + 1) {
-                            if !b.is_ascii_digit() {
-                                all_digits = false;
-                                break;
-                            }
-                        }
-                        all_digits
-                    };
-
-                    if pre_valid_for_ip
-                        && (post_looks_like_dotted_ipv4
-                            || post_looks_like_ip
-                            || post_looks_like_number)
-                    {
-                        // Accept entire run as one token (oldnet or
-                        // CIDR or weird but plausible); classifier will
-                        // validate fully.
-                        return Some((start, end));
-                    } else {
-                        // can't interpret post as something plausible:
-                        // fallthrough to rejecting
-                        continue;
-                    }
-                } else {
-                    // oldnet disabled
-                    // If post looks like a numeric CIDR (all digits),
-                    // keep the whole token (CIDR)
-                    let post_all_digits = {
-                        let mut all_digits = true;
-                        for b in bytes.iter().take(end).skip(slash_idx + 1) {
-                            if !b.is_ascii_digit() {
-                                all_digits = false;
-                                break;
-                            }
-                        }
-                        all_digits
-                    };
-
-                    if post_all_digits {
-                        // Keep whole CIDR token: "1.2.3.0/24"
-                        // but minimal guard: pre must be a plausible ip-ish
-                        if pre_valid_for_ip {
-                            return Some((start, end));
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    // If post starts with digit and looks like an IP
-                    // (contains '.' or ':'), split: return pre only
-                    if post_starts_digit
-                        && (post_has_dot || post_has_colon)
-                        && pre_valid_for_ip
-                    {
-                        // return prefix (start..slash_idx) and leave
-                        // scanner.pos set to slash+1 so next() will see
-                        // the post token
-                        self.pos = slash_idx + 1;
-                        return Some((start, slash_idx));
-                    }
-
-                    // Otherwise keep whole run if pre_valid_for_ip
-                    // (e.g. weird cases with letters -- defer to
-                    // classifier)
-                    if pre_valid_for_ip {
-                        return Some((start, end));
-                    }
-
-                    continue;
-                }
-            }
-        }
-
-        self.pos = len;
-        None
+        self.next_impl()
     }
-}
-
-fn is_alnum(b: u8) -> bool {
-    b.is_ascii_digit() || b.is_ascii_lowercase() || b.is_ascii_uppercase()
-}
-
-fn is_hexdigit_or_colon(b: u8) -> bool {
-    matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b':')
-}
-
-fn is_whitespace(b: u8) -> bool {
-    matches!(b, b' ' | b'\t' | b'\r' | b'\n' | 0x0B | 0x0C)
-}
-
-/// ASCII punctuation we consider safe delimiters (trim trailing '.' /
-/// ':' when followed by these)
-#[rustfmt::skip]
-fn is_delim_punct(b: u8) -> bool {
-    // typical punctuation that can follow an IP in text: space, comma,
-    // semicolon, parentheses, etc.
-    is_whitespace(b) || matches!(
-        b,
-        b',' | b';' | b')' | b'(' | b']' | b'[' | b'<' | b'>' | b'\"' | b'\''
-    )
 }
 
 #[cfg(test)]
@@ -350,7 +432,7 @@ mod tests {
         let cases = [
             (
                 // First one needs the "as &[u8]" to define the type.
-                b"plain 1.2.3.4 end" as &[u8],  
+                b"plain 1.2.3.4 end" as &[u8],
                 &["1.2.3.4"][..],
                 &["1.2.3.4"][..],
             ),
@@ -405,6 +487,66 @@ mod tests {
                 &["100.200.300.400"][..],
                 &["100.200.300.400"][..],
             ),
+            (
+                b"multiple colons 1.1.1.1:2.2.2.2:3.3.3.3 end",
+                &["1.1.1.1", "2.2.2.2", "3.3.3.3"][..],
+                &["1.1.1.1", "2.2.2.2", "3.3.3.3"][..],
+            ),
+            (
+                b"ports 1.2.3.4:17772 and 10.20.30.40:22",
+                &["1.2.3.4", "10.20.30.40"][..],
+                &["1.2.3.4", "10.20.30.40"][..],
+            ),
+            (
+                b"ipv6 unaffected ::1:80 still valid",
+                &["::1:80"][..],
+                &["::1:80"][..],
+            ),
+            (
+                b"100.200.300.400:80, 40.30.20.10:443",
+                &["100.200.300.400", "40.30.20.10"][..],
+                &["100.200.300.400", "40.30.20.10"][..],
+            ),
+            (
+                b"range like: 192.168.0.0..192.168.2.255",
+                &["192.168.0.0", "192.168.2.255"][..],
+                &["192.168.0.0", "192.168.2.255"][..],
+            ),
+            (
+                b"::Ffff:123.45.67.89/1",
+                &["::Ffff:123.45.67.89/1"][..],
+                &["::Ffff:123.45.67.89/1"][..],
+            ),
+            (
+                b"/::fFfF:123.45.67.89/1.2.3.4.5/::/",
+                &["::fFfF:123.45.67.89", "::"][..],
+                &["::fFfF:123.45.67.89", "::"][..],
+            ),
+            (
+                b"..1.2.3.4..5.6.7.8..",
+                &["1.2.3.4", "5.6.7.8"][..],
+                &["1.2.3.4", "5.6.7.8"][..],
+            ),
+            (
+                b"1.2.3.4z",
+                &[][..],
+                &[][..],
+            ),
+            (
+                b"199.8.7.166.5/199.8.7.166/199.8.177/199.8/199",
+                &["199.8.7.166"][..],
+                &["199.8.7.166"][..],
+            ),
+            (
+                b":255.255.0.0::fec0::fee",
+                &["255.255.0.0"][..],
+                &["255.255.0.0"][..],
+            ),
+            (
+                b"[::255:255.0.0.4]",
+                &["::255:255"][..],
+                &["::255:255"][..],
+            ),
         ];
 
         for (input, expected, expected_with_oldnet) in cases {
@@ -427,7 +569,7 @@ mod tests {
             assert_eq!(
                 got_with_oldnet,
                 expected_with_oldnet,
-                "for input {:?}, expected {:?}, got {:?}",
+                "for (with oldnet) input {:?}, expected {:?}, got {:?}",
                 std::str::from_utf8(input).unwrap(),
                 expected_with_oldnet,
                 got_with_oldnet
