@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use memchr::memchr;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -53,9 +55,17 @@ impl<'a> NetLikeScanner<'a> {
 
         // Leftover is >=7
         let len_minus_6 = len - 6;
+        let mut delim_is_colon = if self.pos > 0 {
+            // memchr(bytes[self.pos - 1], IPV46_START).is_some()
+            bytes[self.pos - 1] == b':'
+        } else {
+            false
+        };
+
         while self.pos < len_minus_6 {
             let b = bytes[self.pos];
-            if self.pos == 0 || bytes[self.pos - 1] != b':' {
+
+            if !delim_is_colon {
                 if let Some(idx) = memchr(b, IPV46_START) {
                     if idx < 10 {
                         // 0..9
@@ -63,6 +73,7 @@ impl<'a> NetLikeScanner<'a> {
                             return Some(res);
                         }
                         // Retry loop now that self.pos is increased.
+                        delim_is_colon = bytes[self.pos - 1] == b':';
                         continue;
                     } else if idx < 22 || bytes[self.pos + 1] == b':' {
                         // a..fA..F || (':' && nextchar is ':')
@@ -70,6 +81,7 @@ impl<'a> NetLikeScanner<'a> {
                             return Some(res);
                         }
                         // Retry loop now that self.pos is increased.
+                        delim_is_colon = bytes[self.pos - 1] == b':';
                         continue;
                     }
                 }
@@ -79,13 +91,29 @@ impl<'a> NetLikeScanner<'a> {
                     return Some(res);
                 }
                 // Retry loop now that self.pos is increased.
+                delim_is_colon = bytes[self.pos - 1] == b':';
                 continue;
+            } else {
+                delim_is_colon = false;
             }
+
             self.pos += 1;
         }
 
         // Leftover is <7
-        self.try_ipv6()
+        while self.pos < len {
+            if matches!(
+                bytes[self.pos],
+                b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b':')
+            {
+                if let Some(res) = self.try_ipv6() {
+                    return Some(res);
+                }
+            }
+            self.pos += 1;
+        }
+
+        None
     }
 
     #[inline]
@@ -100,7 +128,7 @@ impl<'a> NetLikeScanner<'a> {
             }
             i += 1;
         }
-        self.pos = i + 1;
+        self.pos = min(len, i + 1);
         None
     }
 
@@ -119,7 +147,7 @@ impl<'a> NetLikeScanner<'a> {
             }
             i += 1;
         }
-        self.pos = i + 1;
+        self.pos = min(len, i + 1);
         None
     }
 
@@ -135,7 +163,7 @@ impl<'a> NetLikeScanner<'a> {
             }
             i += 1;
         }
-        self.pos = i + 1;
+        self.pos = min(len, i + 1);
         None
     }
 
@@ -347,13 +375,10 @@ impl<'a> NetLikeScanner<'a> {
                     }
                 }
                 b'g'..=b'z' | b'G'..=b'Z' => {
+                    colons = 0; // make the match invalid
                     break;
                 }
                 _ => {
-                    if colons >= 2 {
-                        self.pos = end + 1;
-                        return Some((start, end));
-                    }
                     break;
                 }
             }
@@ -361,7 +386,12 @@ impl<'a> NetLikeScanner<'a> {
         }
 
         self.pos = end + 1;
-        None
+
+        if colons >= 2 {
+            Some((start, end))
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -538,14 +568,38 @@ mod tests {
                 &["199.8.7.166"][..],
             ),
             (
-                b":255.255.0.0::fec0::fee",
-                &["255.255.0.0"][..],
-                &["255.255.0.0"][..],
+                // FIXME: That 'd' could be part of the IPv6, so I don't
+                // like that this matches. It should match "this::" though.
+                b"colons at the end::",
+                &["::"][..],
+                &["::"][..],
+            ),
+            (
+                b"::/::",
+                &["::", "::"][..],
+                &["::", "::"][..],
+            ),
+            (
+                b"0.0.0.0/::/::",
+                &["0.0.0.0", "::", "::"][..],
+                &["0.0.0.0", "::", "::"][..],
             ),
             (
                 b"[::255:255.0.0.4]",
                 &["::255:255"][..],
                 &["::255:255"][..],
+            ),
+            (
+                // FIXME: Not sure if we want to match "fe0c::fee" here.
+                b":255.255.0.0/24::fec0::fee",
+                &["255.255.0.0/24", "fec0::fee"][..],
+                &["255.255.0.0/24", "fec0::fee"][..],
+            ),
+            (
+                // FIXME: Not sure if we want to match "fe0c::fee" here.
+                b":255.255.0.0::fec0::fee",
+                &["255.255.0.0", "fec0::fee"][..],
+                &["255.255.0.0", "fec0::fee"][..],
             ),
         ];
 
