@@ -1,8 +1,12 @@
-.PHONY: all build check deb help rel release test
+.PHONY: all bench build check deb help rel release test
 
 all: check build test
 
+bench:
+	cargo bench --features bench
+
 check:
+	# Type 'cargo fmt' to auto-fix formatting.
 	cargo clippy && cargo fmt --check
 
 build:

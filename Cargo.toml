@@ -5,7 +5,8 @@ version = "0.1.2"
 edition = "2024"
 
 [features]
-version-from-env = []
+version-from-env = []	# supply version through env instead of git
+bench = []		# when running benchmarks
 
 [dependencies]
 clap = { version = "4", features = ["derive", "wrap_help"] }
@@ -14,11 +15,16 @@ memchr = "2"
 ipnet = "2"
 
 [dev-dependencies]
+criterion = "0"
 regex = "1"
 
 [build-dependencies]
 #cargo-auditable = "0"
 #cargo-deb = "3"
+
+[[bench]]
+name = "netlike"
+harness = false
 
 [profile.release]
 # Non-scientific test said that the following options made things worse:
