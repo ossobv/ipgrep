@@ -17,6 +17,7 @@ RUN cargo install cargo-auditable cargo-deb
 
 # Copy prerequisites for cargo update/fetch
 COPY Cargo.lock Cargo.toml /src/ipgrep/
+COPY benches /src/ipgrep/benches
 COPY src/lib.rs /src/ipgrep/src/lib.rs
 
 # Update/fetch

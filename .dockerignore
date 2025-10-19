@@ -4,4 +4,5 @@
 !LICENSE
 !*.rst
 
+!benches/*.rs
 !src/*.rs
