@@ -9,16 +9,31 @@ use ipgrep::netlike::NetLikeScanner;
 fn bench_netlike(c: &mut Criterion) {
     let mut group = c.benchmark_group("NetLikeScanner");
 
-    // During the first tests, I got these:
-    // - 4.0ms for Regex test
-    // - 3.5ms for NetLikeScanner test
-    // Not earth shattering, but it's about 15% (and better),
-    // so good enough for now.
+    // For the timings below, we have to consider two things:
+    // - The actual search code might not reach it because we use
+    //   prefiltering by "[0-9][.][0-9]" or "[0-9a-fA-F:]:". If those
+    //   aren't found, we won't scan at all.
+    // - The regular expression test is incomplete. The NetLikeScanner
+    //   will do better matching, which I haven't been able to reproduce
+    //   using pure regexes.  (Possibly because they require negative
+    //   matches which are not supported.)
+
+    // duration |  slow | method          | remarks
+    // --------:|------:|-----------------|--------
+    //    4.2ms |  +15% | Regex           |
+    //    3.6ms |   win | NetLikeScanner  | faster and better
     bench_dataset(&mut group, "big", &make_big_input(), 60_000);
 
-    // - 100us for Regex test
-    // -  40us for NetLikeScanner test
+    // duration | slow  | method          | remarks
+    // --------:|------:|-----------------|--------
+    //    100us | +170% | Regex           |
+    //     37us |   win | NetLikeScanner  | faster and better
     bench_dataset(&mut group, "bogus-ipv4", &make_bogus_ipv4_input(), 0);
+
+    // duration | slow  | method          | remarks
+    // --------:|------:|-----------------|--------
+    //    190us |   win | Regex           | we'll need SIMD to match this
+    //    470us | +150% | NetLikeScanner  |
     bench_dataset(&mut group, "just-one", &make_just_one_hit(), 1);
 
     // These are not realistic, as we're using the prefilter code to
@@ -59,10 +74,10 @@ fn make_bogus_ipv4_input() -> Vec<u8> {
 
 fn make_just_one_hit() -> Vec<u8> {
     let chunk = b"
-        some random text without any ipv4 or ipv6 anywhere;
-        although there are some 1.2 numbers and maybe \":a colon:\" or two
+        some random text without any ipv4 or ipv6 anywhere; although
+        there are some 1.2.3. numbers and maybe \":a colon:\" or two
     ";
-    let copies = 1; //5_001;
+    let copies = 1_000;
     let mut buf = Vec::with_capacity(copies * chunk.len());
     for _ in 0..copies {
         buf.extend_from_slice(chunk);
@@ -78,39 +93,38 @@ fn bench_dataset(
     data: &[u8],
     expected_count: usize,
 ) {
-    // This basic regex is likely not good enough to handle all our
-    // corner cases. But it serves as a nice base line to compare
-    // against.
-    let re = Regex::new(
-        r"(?x)
-            (?:
-                # IPv4
-                ((?:\d{1,3}\.){3}\d{1,3})
-                (?:\b|[^0-9.])
-                (?:/\d{1,2})?
-                # quickly enforce no 1.2.3.4.5
-                [^.]
-            )
-            |
-            (?:
-                # IPv4-mapped IPv6
-                (::[fF]{4}:
-                (?:\d{1,3}\.){3}\d{1,3})
-                (?:\b|[^0-9.])
-                (?:/\d{1,3})?
-            )
-            |
-            (?:
-                # IPv6
-                ([0-9a-fA-F:]+:[0-9a-fA-F:]*)
-                (?:/\d{1,3})?
-            )
-        ",
-    )
-    .unwrap();
-
     // Test regex baseline.
     group.bench_function(format!("{label} - Regex baseline"), |b| {
+        // This basic regex is not good enough to handle all our corner
+        // cases. But it serves as a nice base line to compare against.
+        let re = Regex::new(
+            r"(?x)
+                (?:
+                    # IPv4
+                    ((?:\d{1,3}\.){3}\d{1,3})
+                    (?:\b|[^0-9.])
+                    (?:/\d{1,2})?
+                    # quickly enforce no 1.2.3.4.5
+                    [^.]
+                )
+                |
+                (?:
+                    # IPv4-mapped IPv6
+                    (::[fF]{4}:
+                    (?:\d{1,3}\.){3}\d{1,3})
+                    (?:\b|[^0-9.])
+                    (?:/\d{1,3})?
+                )
+                |
+                (?:
+                    # IPv6
+                    ([0-9a-fA-F:]+:[0-9a-fA-F:]*)
+                    (?:/\d{1,3})?
+                )
+            ",
+        )
+        .unwrap();
+
         let mut result = 0;
         b.iter(|| {
             let mut count = 0;

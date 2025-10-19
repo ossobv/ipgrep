@@ -17,6 +17,7 @@ ipnet = "2"
 [dev-dependencies]
 criterion = "0"
 regex = "1"
+zerocopy = "0"
 
 [build-dependencies]
 #cargo-auditable = "0"
@@ -24,6 +25,10 @@ regex = "1"
 
 [[bench]]
 name = "netlike"
+harness = false
+
+[[bench]]
+name = "scanner"
 harness = false
 
 [profile.release]
