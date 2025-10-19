@@ -304,6 +304,10 @@ impl<'a> NetLikeScanner<'a> {
         }
 
         // Easy case.
+        if numsize == 0 {
+            self.pos = min(len, end + 1);
+            return None;
+        }
         if end == len {
             self.pos = end;
             return Some((start, end));
@@ -588,6 +592,11 @@ mod tests {
                 b"[::255:255.0.0.4]",
                 &["::255:255"][..],
                 &["::255:255"][..],
+            ),
+            (
+                b"11.22.33.",
+                &[][..],
+                &[][..],
             ),
             (
                 // FIXME: Not sure if we want to match "fe0c::fee" here.
