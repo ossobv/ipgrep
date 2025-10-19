@@ -44,6 +44,11 @@ Examples
     ff02::1 ip6-allnodes
     ff02::2 ip6-allrouters
 
+*Looking for IPv4-mapped IPv6 addresses?*::
+
+    $ echo ::ffff:127.0.0.1 | ipgrep ::ffff:0:0/96 -m w
+    ::ffff:127.0.0.1
+
 
 -----
 Usage
