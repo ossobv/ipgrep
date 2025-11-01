@@ -3,6 +3,9 @@ name = "ipgrep"
 description = "ipgrep searches for IP addresses in CIDRs"
 version = "0.1.3"
 edition = "2024"
+license = "GPL-3.0-or-later"
+readme = "README.rst"
+repository = "https://github.com/ossobv/ipgrep"
 
 [features]
 version-from-env = []	# supply version through env instead of git
