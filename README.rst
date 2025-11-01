@@ -133,6 +133,84 @@ It's slightly more readable/concise than the Rust clap output.
 See ``ipgrep --help`` for the actual output, which should be 100% compatible.
 
 
+--------------------------
+Prior art / feature parity
+--------------------------
+
+Obviously *ossobv/ipgrep* isn't the first tool that searches for IPs.
+And apparently, there are several applications called ``ipgrep``
+already. Here's an attempt at enumerating other versions and their
+features.
+
+*Disclaimer: I did not try all these tools. This table is
+based on their documentation.*
+
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Feature/notes                        | ipgrep   | grep     | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ipgrep   | grepcidr | grepcidr | ...      |
++======================================+==========+==========+==========+==========+==========+==========+==========+==========+==========+==========+
+| Author/source                        | ossobv_  | POSIX    | dmages_  | jstarke_ | princeb_ | jesdict_ | robrwo_  | berkes_  | levine_  | ...      |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Version                              | 0.1.3    | *many*   | 0.2      | 0.2.0    | *none*   | 1.0.1    | 0.7.0    | 2.0      | 3.02     | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Last updated                         | 2025     | 2025     | 2019     | 2023     | 2016     | 2023     | 2023     | 2014     | 2025     | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Programming language                 | rust     | C        | perl     | rust     | golang   | python   | perl     | C        | C        | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| IP address aware [1]_                | ✅       | ❌       | ✅       | ✅       | ✅       | ✅       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| IP class aware (private, public)     | ⏳       | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Network/CIDR "contains" match        | ✅       | ❌       | ✅       | ❌       | ❌       | ❌       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Handles IPv6                         | ✅       | ✅ [1]_  | ✅       | ❌       | ✅       | ❌       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Search multiple files                | ✅       | ✅       | ✅       | ✅       | ✅       | ✅       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Search directories recursively       | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Highlight/colorize matches           | ✅       | ✅       | ❌       | ✅       | ❌       | ❌       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Optionally extract only IPs [2]_     | ✅       | ✅       | ❌       | ❌       | 🟡       | 🟡       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Support negative match (-v)          | ⏳       | ✅       | ❌       | ✅       | ❌       | ❌       | ❔       | ✅       | ✅       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Support showing context lines (-C)   | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❔       | ❌       | ❌       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Support showing counts (-c)          | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❔       | ✅       | ✅       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| Deobfuscate / resolve hostnames [3]_ | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❔       | ❌       | ❌       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+| ...                                  | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
+
+**In the above table ⏳ might mean that it's under consideration. Not
+that it's necessarily coming soon.**
+
+.. [1] **POSIX grep** does not have any notion of IP addresses,
+   but it can match both IPv4 and IPv6 if you provide the right
+   regular expression.
+.. [2] **POSIX grep** and **ossobv/ipgrep** support extracting only
+   IPs using ``-o``. The other implementations either return full
+   lines or only IPs, without an option to switch.
+.. [3] **jesdict1/ipgrep** detects obfuscated hostnames such as
+   ``hxxp://`` and ``www[.]example[.]com`` and resolves them. This
+   feature is not planned for **ossobv/ipgrep**.
+
+Other tools not shown in the list:
+
+* markust_: **markusthilo/ipgrep** (v0.3, 2020, C) merges and filters PCAP files.
+
+.. _ossobv: https://github.com/ossobv/ipgrep
+.. _berkes: https://www.pc-tools.net/unix/grepcidr/
+.. _dmages: http://www.digitalmages.com/projects/misc-network-tools/man/man1/ipgrep.html
+.. _jesdict: https://github.com/jedisct1/ipgrep
+.. _jstarke: https://github.com/janstarke/ipgrep
+.. _levine: https://github.com/jrlevine/grepcidr3
+.. _markust: https://github.com/markusthilo/ipgrep
+.. _princeb: https://github.com/princebot/ipgrep
+.. _robrwo: https://github.com/robrwo/perl-ipgrep
+
+
 -------
 License
 -------
