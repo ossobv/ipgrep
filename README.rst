@@ -140,38 +140,38 @@ Prior art / feature parity
 Obviously *ossobv/ipgrep* isn't the first tool that searches for IPs.
 And apparently, there are several applications called ``ipgrep``
 already. Here's an attempt at enumerating other versions and their
-features.
+features. Ordered by feature-completeness.
 
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Feature/notes                        | ipgrep   | grep     | ipgrep   | grepcidr | grepcidr | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ...      |
+| Features in application              | ipgrep   | grep     | grepcidr | grepcidr | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ...      |
 +======================================+==========+==========+==========+==========+==========+==========+==========+==========+==========+==========+==========+
-| Author/source                        | ossobv_  | POSIX    | robrwo_  | berkes_  | levine_  | joonas_  | dmages_  | jstarke_ | princeb_ | jesdict_ | ...      |
+| Author/source                        | ossobv_  | POSIX    | levine_  | berkes_  | robrwo_  | joonas_  | dmages_  | jstarke_ | princeb_ | jesdict_ | ...      |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Version                              | 0.1.3    | *many*   | 0.7.0    | 2.0      | 3.02     | 0.3.2    | 0.2      | 0.2.0    | *none*   | 1.0.1    | ❔       |
+| Version                              | 0.1.3    | *many*   | 3.02     | 2.0      | 0.7.0    | 0.3.2    | 0.2      | 0.2.0    | *none*   | 1.0.1    | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Last updated                         | 2025     | 2025     | 2023     | 2014     | 2025     | 2025     | 2019     | 2023     | 2016     | 2023     | ❔       |
+| Last updated                         | 2025     | 2025     | 2025     | 2014     | 2023     | 2025     | 2019     | 2023     | 2016     | 2023     | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Programming language                 | rust     | C        | perl     | C        | C        | golang   | perl     | rust     | golang   | python   | ❔       |
+| Programming language                 | rust     | C        | C        | C        | perl     | golang   | perl     | rust     | golang   | python   | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| IP address aware [1]_                | ✅       | ❌       | ✅ [5]_  | ✅       | ✅ [5]_  | ✅ [7]_  | ✅       | ✅       | ✅ [5]_  | ✅       | ❔       |
+| IP address aware [1]_                | ✅       | ❌       | ✅ [6]_  | ✅       | ✅ [6]_  | ✅ [6]_  | ✅       | ✅       | ✅ [6]_  | ✅       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Search by needle(s) [2]_             | ✅       | ✅       | 🟡 [6]_  | 🟡 [6]_  | 🟡 [6]_  | 🟡       | 🟡       | ❌       | ❌       | ❌       | ❔       |
+| Search by needle(s) [2]_             | ✅       | ✅       | 🟡 [2]_  | 🟡 [2]_  | 🟡 [2]_  | 🟡       | 🟡       | ❌       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| IP class aware (private, public)     | ⏳ #3    | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
+| Search by IP class (e.g. "public")   | ⏳ #3    | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | Network/CIDR "contains" match        | ✅       | ❌       | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | Handles legacy 1.2.3.0m255.255.255.0 | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❌       | ❌       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Handles IPv6                         | ✅       | ✅ [1]_  | ✅       | ✅       | ✅       | ✅       | ❌ [8]_  | ❌       | ✅       | ❌       | ❔       |
+| Handles IPv6                         | ✅       | ✅ [1]_  | ✅       | ✅       | ✅       | ✅       | ❌ [7]_  | ❌       | ✅       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Search multiple files                | ✅       | ✅       | ✅       | ✅       | ✅       | ✅       | 🟡 [9]_  | ✅       | ✅       | ✅       | ❔       |
+| Search multiple files                | ✅       | ✅       | ✅       | ✅       | ✅       | ✅       | 🟡 [7]_  | ✅       | ✅       | ✅       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | Search directories recursively       | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | Highlight/colorize matches           | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Optionally extract only IPs [3]_     | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌       | ❌       | 🟡       | 🟡       | ❔       |
+| Extract only IPs (-o) [3]_           | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌       | ❌       | 🟡       | 🟡       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | Support negative match (-v)          | ⏳ #2    | ✅       | ✅       | ✅       | ✅       | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
@@ -181,7 +181,7 @@ features.
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | Deobfuscate / resolve hostnames [4]_ | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
-| Run duration [10]_                   | **1**    | ∅        | **3.7**  | **1.8**  | **1.3**  | **4.2**  | ∅        | ∅        | ∅        | ∅        | ❔       |
+| Run duration [5]_                    | **1**    | ∅        | **1.3**  | **1.8**  | **3.7**  | **4.2**  | ∅        | ∅        | ∅        | ∅        | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
 | ...                                  | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       |
 +--------------------------------------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+
@@ -192,26 +192,29 @@ that it's necessarily coming soon.**
 .. [1] **POSIX grep** does not have any notion of IP addresses,
    but it can match both IPv4 and IPv6 if you provide the right
    regular expression.
-.. [2] Most tools only allow searching by a single needle IP (or CIDR).
-.. [3] **POSIX grep** and **ossobv/ipgrep** support extracting only
-   IPs using ``-o``. The other implementations either return full
-   lines or only IPs, without an option to switch.
+.. [2] Most tools only allow searching by a single needle IP or CIDR.
+   Some tools do allow multiple needles specified through a file,
+   but specifying those using bash process substitution fails because
+   that file is reread for each opened haystack file.
+.. [3] Better tools support extracting only IPs using a ``-o`` flag, or
+   similar. Other implementations either return full lines or only IPs,
+   without an option to switch.
 .. [4] **jesdict1/ipgrep** detects obfuscated hostnames such as
    ``hxxp://`` and ``www[.]example[.]com`` and resolves them. This
    feature is not planned for **ossobv/ipgrep**.
-.. [5] Some tools consider ``([0-9]+[.]){4}[0-9]`` valid, while they're
-   generally as ASN.1 object identifiers. Some tools don't consider
-   ([0-9]+[.]){4}[.] valid while that is valid at the end of a sentence.
-.. [6] Some tools require a file for multiple needles, and using bash
-   process substitution fails because the file is reread for each opened
-   file.
-.. [7] **joneskoo/ipgrep** won't list "commented out" IPs.
-.. [8] **digitalmages/ipgrep** doesn't know what ``::/0`` is. Can't
-   trust this for IPv6.
-.. [9] **digitalmages/ipgrep** dies if it cannot read a file.
-.. [10] Run duration is a non-scientific test over the same dataset.
+.. [5] Run duration is a non-scientific test over the same dataset.
    The fastest one has a duration of 1.
    Only tools that could reasonably be compared were eligible.
+.. [6] **robrwo/ipgrep** and **jrlevine/grepcidr** consider
+   ``([0-9]+[.]){4}[0-9]`` to be valid, while those are
+   generally ASN.1 object identifiers.
+   **princebot/ipgrep** and the **berkes/grepcidr** tools don't consider
+   ``([0-9]+[.]){4}[.]`` valid while that would be a valid the end of a
+   sentence.
+   **joneskoo/ipgrep** won't list "commented out" IPs.
+.. [7] **digitalmages/ipgrep** doesn't know what ``::/0`` is. So we can't
+   trust this for IPv6. **digitalmages/ipgrep** also dies as soon as it
+   has trouble reading a file.
 
 
 Other tools not shown in the list:
