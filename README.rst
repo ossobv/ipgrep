@@ -25,6 +25,9 @@ Examples
     $ ip -br a | ipgrep 127.0.0.0/8 -m within
     lo               UNKNOWN        127.0.0.1/8 ::1/128
 
+**NOTE: The default -m mode changes from "contains" to "within" when the
+any needle is a network larger than a single IP.**
+
 *Find exact IP matches*::
 
     $ ip -br a | ipgrep 0:0:0:0:0:0:0:1 -m equals

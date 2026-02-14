@@ -37,6 +37,8 @@ pub enum InterfaceModeArg {
 
 #[derive(Clone, ValueEnum, Debug)]
 pub enum MatchModeArg {
+    #[value(alias = "a")]
+    Auto,
     #[value(alias = "c")]
     Contains,
     #[value(alias = "w")]
@@ -68,10 +70,10 @@ Exit status:
 
 Example invocations:
   # Look for a few IPs in all networks found in /etc.
-  ipgrep -C 5 -a net -a oldnet -r 192.168.2.5,192.168.2.78 /etc/*
+  ipgrep -C 5 -a net -a oldnet [-m contains] -r 192.168.2.5,10.0.2.1 /etc/*
 
   # Output linefeed separated IPs of all IPv4 hosts/interfaces.
-  ipgrep -m within -o 0.0.0.0/0 input.txt",
+  ipgrep [-m within] -o 0.0.0.0/0 input.txt",
     help_template="\
 {name} {version} - {about}
 
@@ -109,10 +111,11 @@ Select interface IP matching mode:
     /// Match mode
     #[arg(
         short='m', long="match", value_enum,
-        default_value_t=MatchModeArg::Contains,
+        default_value_t=MatchModeArg::Auto,
         help_heading="Matching Control",
         long_help="\
 Match mode:
+   auto     - 'contains' if the all needles are a single IP, else 'within'
    contains - haystack net contains needle net
    within   - haystack net is within needle net (inverse of contains)
    equals   - exact IP or network equality
@@ -261,17 +264,21 @@ impl Args {
         let show_context = self.make_show_context();
         let recursive = self.make_recursive();
 
+        // Match mode depends on the needles.
+        let needles: Vec<Needle> = self.needles.into();
+        let match_mode: MatchMode = self.match_mode.resolve(&needles);
+
         Parameters {
             accept: self.accept.into(),
             interface_mode: self.interface_mode.into(),
-            match_mode: self.match_mode.into(),
+            match_mode,
             output_style,
             hide_filename: self.no_filename,
             show_lineno: self.line_number,
             show_context,
             recursive,
             line_buffered: self.line_buffered,
-            needles: self.needles.into(),
+            needles,
             haystack_filenames: self.haystacks,
         }
     }
@@ -376,9 +383,24 @@ impl From<InterfaceModeArg> for InterfaceMode {
 }
 
 /// Conversion helper for MatchModeArg to MatchMode
-impl From<MatchModeArg> for MatchMode {
-    fn from(m: MatchModeArg) -> Self {
-        match m {
+impl MatchModeArg {
+    /// Resolves the CLI argument into a concrete MatchMode,
+    /// using the parsed needles to determine the behavior of 'Auto'.
+    pub fn resolve(self, needles: &[Needle]) -> MatchMode {
+        match self {
+            MatchModeArg::Auto => {
+                // For Auto mode, we consider all needles:
+                // - is any larger than a single IP? then Within
+                // - else? Contains
+                let all_are_single_ip =
+                    needles.iter().all(|n| n.net.is_single_ip());
+
+                if all_are_single_ip {
+                    MatchMode::Contains
+                } else {
+                    MatchMode::Within
+                }
+            }
             MatchModeArg::Contains => MatchMode::Contains,
             MatchModeArg::Within => MatchMode::Within,
             MatchModeArg::Equals => MatchMode::Equals,
@@ -405,5 +427,64 @@ impl From<NeedleArg> for Vec<Needle> {
             }
         }
         needles
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_match_mode_auto_contains_because_no_needles() {
+        // No needles => contains
+        let needles: Vec<Needle> = vec![];
+        let match_mode = MatchModeArg::Auto.resolve(&needles);
+        assert!(matches!(match_mode, MatchMode::Contains));
+    }
+
+    #[test]
+    fn test_match_mode_auto_contains_because_single_ip() {
+        let needles: Vec<Needle> =
+            vec![Needle::try_from("123.123.123.123").unwrap()];
+        let match_mode = MatchModeArg::Auto.resolve(&needles);
+        assert!(matches!(match_mode, MatchMode::Contains));
+    }
+
+    #[test]
+    fn test_match_mode_auto_contains_because_multiple_ips() {
+        let needles: Vec<Needle> = vec![
+            Needle::try_from("1.2.3.4").unwrap(),
+            Needle::try_from("fe01::123/128").unwrap(),
+        ];
+        let match_mode = MatchModeArg::Auto.resolve(&needles);
+        assert!(matches!(match_mode, MatchMode::Contains));
+    }
+
+    #[test]
+    fn test_match_mode_auto_within_because_single_net() {
+        let needles: Vec<Needle> =
+            vec![Needle::try_from("192.168.0.0/16").unwrap()];
+        let match_mode = MatchModeArg::Auto.resolve(&needles);
+        assert!(matches!(match_mode, MatchMode::Within));
+    }
+
+    #[test]
+    fn test_match_mode_auto_within_because_first_is_net() {
+        let needles: Vec<Needle> = vec![
+            Needle::try_from("192.168.0.0/16").unwrap(),
+            Needle::try_from("::1/128").unwrap(),
+        ];
+        let match_mode = MatchModeArg::Auto.resolve(&needles);
+        assert!(matches!(match_mode, MatchMode::Within));
+    }
+
+    #[test]
+    fn test_match_mode_auto_within_because_second_is_net() {
+        let needles: Vec<Needle> = vec![
+            Needle::try_from("1.2.3.4").unwrap(),
+            Needle::try_from("::2/127").unwrap(),
+        ];
+        let match_mode = MatchModeArg::Auto.resolve(&needles);
+        assert!(matches!(match_mode, MatchMode::Within));
     }
 }

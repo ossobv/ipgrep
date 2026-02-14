@@ -55,6 +55,12 @@ impl Net {
         matches!(self.0, IpNet::V6(_ipnet))
     }
 
+    /// Returns true if the network is a single IP address (/32 for
+    /// IPv4, /128 for IPv6)
+    pub fn is_single_ip(&self) -> bool {
+        self.0.prefix_len() == self.0.max_prefix_len()
+    }
+
     pub fn as_ip(&self) -> Self {
         Net(IpNet::new(self.0.addr(), self.0.max_prefix_len())
             .expect("cannot fail"))
