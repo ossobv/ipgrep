@@ -241,6 +241,7 @@ Match mode:
     /// Needles (one or more networks separated by comma or whitespace)
     ///
     /// For example: 192.168.2.0/24,2001:db8::/32
+    #[arg(default_value = "0.0.0.0/0,::/0")]
     pub needles: NeedleArg,
 
     /// Haystacks are one or more files. If none (or '-') given, stdin is read.
@@ -425,6 +426,13 @@ impl From<NeedleArg> for Vec<Needle> {
                         .exit();
                 }
             }
+        }
+        if needles.is_empty() {
+            // If it's empty, use the defaults.
+            needles = vec![
+                Needle::try_from("0.0.0.0/0").unwrap(),
+                Needle::try_from("::/0").unwrap(),
+            ];
         }
         needles
     }

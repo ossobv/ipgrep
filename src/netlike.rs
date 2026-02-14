@@ -347,6 +347,19 @@ impl<'a> NetLikeScanner<'a> {
         let mut end = start;
         let mut colons = 0;
 
+        // Double check that the start was okay. We don't start IPv6 after [0-9A-Z:]
+        if start > 0
+            && matches!(bytes[start - 1], b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b':')
+        {
+            while end < len
+                && matches!(bytes[end], b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z')
+            {
+                end += 1;
+            }
+            self.pos = end + 1;
+            return None;
+        }
+
         while end < len {
             match bytes[end] {
                 b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
@@ -497,6 +510,21 @@ mod tests {
                 &[][..],
             ),
             (
+                b"not v6 match: :x:fe80::1.2.3.4 or something",
+                &["1.2.3.4"][..], // not fe80::1
+                &["1.2.3.4"][..], // not fe80::1
+            ),
+            (
+                b"not v4 match: fe80::1.2.3.4 or something",
+                &["fe80::1"][..], // not 1.2.3.4
+                &["fe80::1"][..], // not 1.2.3.4
+            ),
+            (
+                b"no match: messagebus:x:102:105::/nonexistent:/sbin/nologin",
+                &[][..], // not 102:105::, also not ::
+                &[][..], // not 102:105::, also not ::
+            ),
+            (
                 b"do match: 1.2.3.4. 5 and no garbage 12a3::def. zz",
                 &["1.2.3.4", "12a3::def"][..],
                 &["1.2.3.4", "12a3::def"][..],
@@ -572,11 +600,9 @@ mod tests {
                 &["199.8.7.166"][..],
             ),
             (
-                // FIXME: That 'd' could be part of the IPv6, so I don't
-                // like that this matches. It should match "this::" though.
-                b"colons at the end::",
-                &["::"][..],
-                &["::"][..],
+                b"No colons at the end::",
+                &[][..],
+                &[][..],
             ),
             (
                 b"::/::",
@@ -599,16 +625,14 @@ mod tests {
                 &[][..],
             ),
             (
-                // FIXME: Not sure if we want to match "fe0c::fee" here.
                 b":255.255.0.0/24::fec0::fee",
-                &["255.255.0.0/24", "fec0::fee"][..],
-                &["255.255.0.0/24", "fec0::fee"][..],
+                &["255.255.0.0/24"][..], // not fec0::fee
+                &["255.255.0.0/24"][..], // not fec0::fee
             ),
             (
-                // FIXME: Not sure if we want to match "fe0c::fee" here.
                 b":255.255.0.0::fec0::fee",
-                &["255.255.0.0", "fec0::fee"][..],
-                &["255.255.0.0", "fec0::fee"][..],
+                &["255.255.0.0"][..], // not fe0c::fee
+                &["255.255.0.0"][..], // not fe0c::fee
             ),
         ];
 
