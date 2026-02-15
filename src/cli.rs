@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use clap::error::ErrorKind;
-use clap::{ArgAction, Error, Parser, ValueEnum};
+use clap::{ArgAction, Error, Parser, ValueEnum, value_parser};
 
 use crate::params::{
     AcceptSet, InterfaceMode, MatchMode, Needle, OutputStyle, Parameters,
@@ -163,7 +163,7 @@ Match mode:
         long_help="\
 Implies -o/--only-matching. Truncates found IPs/networks to the specified
 prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
-        value_parser = clap::value_parser!(u8).range(0..=128)
+        value_parser = value_parser!(u8).range(0..=128)
     )]
     pub output_prefix: Option<u8>,
 
@@ -446,7 +446,7 @@ impl MatchModeArg {
     }
 }
 
-/// Conversion helper for NeedleArg to Needle
+/// Conversion helper for NeedleArg to Vec<Needle>
 impl From<NeedleArg> for Vec<Needle> {
     fn from(s: NeedleArg) -> Vec<Needle> {
         let mut needles = Vec::new();
@@ -455,20 +455,19 @@ impl From<NeedleArg> for Vec<Needle> {
             if trimmed.is_empty() {
                 continue;
             }
-            match Needle::try_from(tok) {
-                Ok(needle) => needles.push(needle),
+
+            match Needle::parse(trimmed) {
+                Ok(parsed_needles) => needles.extend(parsed_needles),
                 Err(err) => {
                     Error::raw(ErrorKind::InvalidValue, format!("{err}\n"))
                         .exit();
                 }
             }
         }
+
         if needles.is_empty() {
-            // If it's empty, use the defaults.
-            needles = vec![
-                Needle::try_from("0.0.0.0/0").unwrap(),
-                Needle::try_from("::/0").unwrap(),
-            ];
+            // Default to 'any'.
+            needles = Needle::parse("any").unwrap();
         }
         needles
     }

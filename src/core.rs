@@ -146,6 +146,10 @@ fn search_in_file(
 
         for candidate in netcandidatescanner.find_all(&line, &file.name) {
             for needle in &params.needles {
+                if needle.is_negated {
+                    // TODO: Temporary skip while feature is incomplete.
+                    continue;
+                }
                 if params.match_mode.matches(&candidate.net, &needle.net) {
                     matches.push(candidate);
                     // Push once per needle only. Makes no sense to
