@@ -40,8 +40,8 @@ pub fn run(params: &params::Parameters) -> io::Result<ExitCode> {
 
     // Create scanner that knows what to expect.
     let netcandidatescanner = scanner::NetCandidateScanner::new()
-        .ignore_ipv4(params.needles.iter().all(|n| !n.net.is_ipv4()))
-        .ignore_ipv6(params.needles.iter().all(|n| !n.net.is_ipv6()))
+        .ignore_ipv4(params.positive_needles.iter().all(|n| !n.net.is_ipv4()))
+        .ignore_ipv6(params.positive_needles.iter().all(|n| !n.net.is_ipv6()))
         .set_accept(params.accept)
         .set_interface_mode(params.interface_mode);
 
@@ -138,24 +138,32 @@ fn search_in_file(
         };
         lineno += 1;
 
-        // TODO: As an alternative to ipgrep -v, we'll probably want to
-        // invert needles, like '!192.168.2.0/24'. Probably:
-        // - A,B,C,D   => A | B | C | D
-        // - A,!B,C,!D => (A | C) & !(B | D)
-        // - !A,!B     => ALL & !(A | B)  (where: ALL = "0.0.0.0/0,::/0")
-
+        // Check all possible candidates on the line.
         for candidate in netcandidatescanner.find_all(&line, &file.name) {
-            for needle in &params.needles {
-                if needle.is_negated {
-                    // TODO: Temporary skip while feature is incomplete.
-                    continue;
-                }
+            // Check them for negative match first.
+            let mut matches_negative = false;
+            for needle in &params.negative_needles {
                 if params.match_mode.matches(&candidate.net, &needle.net) {
-                    matches.push(candidate);
-                    // Push once per needle only. Makes no sense to
-                    // have the same match twice.
+                    matches_negative = true;
                     break;
                 }
+            }
+            if matches_negative {
+                // Candidate rejected by a !needle.
+                continue;
+            }
+
+            // Check them for positive match.
+            let mut matches_positive = false;
+            for needle in &params.positive_needles {
+                if params.match_mode.matches(&candidate.net, &needle.net) {
+                    matches_positive = true;
+                    break;
+                }
+            }
+            if matches_positive {
+                // Candidate confirmed.
+                matches.push(candidate);
             }
         }
 

@@ -15,9 +15,9 @@ const IP_ALIASES: &[(&[&str], &[&str])] = &[
     (&["ip4", "ipv4", "v4"], &["0.0.0.0/0"]),
     (&["ip6", "ipv6", "v6"], &["::/0"]),
     // "global"
-    (&["global"], &["global4", "global6"]),
+    (&["glo", "global"], &["global4", "global6"]),
     (
-        &["global4"],
+        &["glo4", "global4"],
         &[
             "ip4",
             "!benchmark4",
@@ -32,11 +32,11 @@ const IP_ALIASES: &[(&[&str], &[&str])] = &[
         ],
     ),
     (
-        &["global6"],
+        &["glo6", "global6"],
         &["ip6", "!doc6", "!linklocal6", "!lo6", "!multicast6"],
     ),
     // "private"
-    (&["priv", "private"], &["priv4", "priv6"]),
+    (&["priv", "private"], &["private4", "private6"]),
     (
         &["priv4", "private4"],
         &["linklocal4", "loopback4", "rfc1918", "shared4"],
@@ -47,7 +47,10 @@ const IP_ALIASES: &[(&[&str], &[&str])] = &[
     (&["linklocal4"], &["169.254.0.0/16"]),
     (&["linklocal6"], &["fe80::/10"]),
     // "loopback"
-    (&["lo", "localhost", "loopback"], &["lo4", "lo6"]),
+    (
+        &["lo", "localhost", "loopback"],
+        &["localhost4", "localhost6"],
+    ),
     (&["lo4", "localhost4", "loopback4"], &["127.0.0.0/8"]),
     (&["lo6", "localhost6", "loopback6"], &["::1/128"]),
     // "multicast"
@@ -64,7 +67,10 @@ const IP_ALIASES: &[(&[&str], &[&str])] = &[
     (&["shared4"], &["100.64.0.0/10"]), // a.k.a. CGNAT
     (&["zeronet"], &["0.0.0.0/8"]),
     // "documentation"
-    (&["doc", "documentation"], &["doc4", "doc6"]),
+    (
+        &["doc", "documentation"],
+        &["documentation4", "documentation6"],
+    ),
     (
         &["doc4", "documentation4"],
         &["192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"],

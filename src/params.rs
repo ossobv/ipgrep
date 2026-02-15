@@ -24,6 +24,7 @@ pub struct Parameters {
     // Other Options:
     pub line_buffered: bool,
     // Positional arguments:
-    pub needles: Vec<Needle>,
+    pub positive_needles: Vec<Needle>,
+    pub negative_needles: Vec<Needle>,
     pub haystack_filenames: Vec<String>,
 }

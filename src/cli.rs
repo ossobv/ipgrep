@@ -266,10 +266,18 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     )]
     pub version: Option<bool>,
 
-    /// Needles (one or more networks separated by comma or whitespace)
+    /// Needles (one or more networks separated by comma or whitespace).
     ///
-    /// For example: 192.168.2.0/24,2001:db8::/32
-    #[arg(default_value = "0.0.0.0/0,::/0")]
+    /// Multiple arguments are OR-ed together. Negation is also allowed,
+    /// they are AND-ed together.
+    ///
+    /// Examples:
+    /// - 10.0.0.0/8,!10.2.0.0/16,fc00::/7 means (A|C)&!B.
+    /// - !10.0.0.0/8 means 0.0.0.0/0 without 10.0.0.0/8
+    ///
+    /// Also valid needles are classes, like "ip4", "ip6", "global",
+    /// "localhost", "multicast", "private". They can also be negated.
+    #[arg(default_value = "ip4,ip6")]
     pub needles: NeedleArg,
 
     /// Haystacks are one or more files. If none (or '-') given, stdin is read.
@@ -295,9 +303,30 @@ impl Args {
         let show_context = self.make_show_context();
         let recursive = self.make_recursive();
 
+        let all_needles: Vec<Needle> = self.needles.into();
+
         // Match mode depends on the needles.
-        let needles: Vec<Needle> = self.needles.into();
-        let match_mode: MatchMode = self.match_mode.resolve(&needles);
+        let match_mode: MatchMode = self.match_mode.resolve(&all_needles);
+
+        // Needles are split into positive and negative ones.
+        let (negative_needles, mut positive_needles): (
+            Vec<Needle>,
+            Vec<Needle>,
+        ) = all_needles.into_iter().partition(|n| n.is_negated);
+        if positive_needles.is_empty() {
+            // Design choice: if the user specifies "!rfc1918" they will
+            // only get IPv4 addresses.  If they want IPv6 as well, they
+            // should use "any,!rfc1918".
+            let has_v4 = negative_needles.iter().any(|n| n.net.is_ipv4());
+            let has_v6 = negative_needles.iter().any(|n| n.net.is_ipv6());
+            assert!(has_v4 || has_v6);
+            if has_v4 {
+                positive_needles.push(Needle::try_from("0.0.0.0/0").unwrap());
+            }
+            if has_v6 {
+                positive_needles.push(Needle::try_from("::/0").unwrap());
+            }
+        }
 
         Parameters {
             accept: self.accept.into(),
@@ -311,7 +340,8 @@ impl Args {
             show_context,
             recursive,
             line_buffered: self.line_buffered,
-            needles,
+            positive_needles,
+            negative_needles,
             haystack_filenames: self.haystacks,
         }
     }
