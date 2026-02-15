@@ -175,6 +175,14 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     )]
     pub quiet: bool,
 
+    /// Select non-matching lines, will include non-IPs in output
+    #[arg(
+        short = 'v',
+        long = "invert-match",
+        help_heading = "General Output Control"
+    )]
+    pub invert_match: bool,
+
     /// Suppress filename prefix on output
     #[arg(
         short = 'h',
@@ -270,6 +278,8 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
 
 const ERR_CONTEXT_CONFLICT: &str = "\
 --context conflicts with --before-context/--after-context\n";
+const ERR_INVONLY_CONFLICT: &str = "\
+--invert-match conflicts with --only-matching/--output-prefix\n";
 const ERR_RECURSIVE_CONFLICT: &str = "\
 choose either --recursive or --deref-recursive\n";
 
@@ -295,6 +305,7 @@ impl Args {
             match_mode,
             output_style,
             rewrite_output_prefix: self.output_prefix,
+            invert_match: self.invert_match,
             hide_filename: self.no_filename,
             show_lineno: self.line_number,
             show_context,
@@ -326,6 +337,10 @@ impl Args {
             OutputStyle::ShowCountsPerFile
         } else if self.only_matching || self.output_prefix.is_some() {
             // -o/--only-matching
+            if self.invert_match {
+                Error::raw(ErrorKind::ArgumentConflict, ERR_INVONLY_CONFLICT)
+                    .exit();
+            }
             OutputStyle::ShowOnlyMatching
         } else {
             OutputStyle::ShowLinesAndContext

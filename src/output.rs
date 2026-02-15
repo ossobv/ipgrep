@@ -161,20 +161,11 @@ impl Display {
         filename: &str,
         lineno: usize,
         line: &[u8],
+        matches: &Vec<NetCandidate>,
     ) -> io::Result<()> {
-        if self.show_filename {
-            self.write_filename(writer, filename)?;
-            self.write_separator(writer, b"-")?;
-        }
-        if self.show_lineno {
-            self.write_linenumber(writer, lineno)?;
-            self.write_separator(writer, b"-")?;
-        }
-        if self.show_filename || self.show_lineno {
-            self.write_no_color(writer)?;
-        }
-        self.write(writer, line)?;
-        Ok(())
+        self.print_line_with_matches(
+            writer, b"-", filename, lineno, line, matches,
+        )
     }
 
     pub fn print_context_delimiter(
@@ -196,13 +187,27 @@ impl Display {
         line: &[u8],
         matches: &Vec<NetCandidate>,
     ) -> io::Result<()> {
+        self.print_line_with_matches(
+            writer, b":", filename, lineno, line, matches,
+        )
+    }
+
+    fn print_line_with_matches(
+        &self,
+        writer: &mut dyn Write,
+        separator: &[u8],
+        filename: &str,
+        lineno: usize,
+        line: &[u8],
+        matches: &Vec<NetCandidate>,
+    ) -> io::Result<()> {
         if self.show_filename {
             self.write_filename(writer, filename)?;
-            self.write_separator(writer, b":")?;
+            self.write_separator(writer, separator)?;
         }
         if self.show_lineno {
             self.write_linenumber(writer, lineno)?;
-            self.write_separator(writer, b":")?;
+            self.write_separator(writer, separator)?;
         }
         if self.show_filename || self.show_lineno {
             self.write_no_color(writer)?;
@@ -489,23 +494,23 @@ mod tests {
     fn display_print_context() {
         let line = b"whatever context\n";
         check_display(Display::new(), "whatever context\n", |d, o| {
-            d.print_context(o, "fn", 1231, line)
+            d.print_context(o, "fn", 1231, line, &vec![])
         });
         check_display(
             Display::new().show_filename(true),
             "\u{1b}[0;35mfnX\u{1b}[0;36m-\u{1b}[0mwhatever context\n",
-            |d, o| d.print_context(o, "fnX", 1232, line),
+            |d, o| d.print_context(o, "fnX", 1232, line, &vec![]),
         );
         check_display(
             Display::new().show_lineno(true),
             "\u{1b}[0;32m1233\u{1b}[0;36m-\u{1b}[0mwhatever context\n",
-            |d, o| d.print_context(o, "fnY", 1233, line),
+            |d, o| d.print_context(o, "fnY", 1233, line, &vec![]),
         );
         check_display(
             Display::new().show_filename(true).show_lineno(true),
             "\u{1b}[0;35mfnZ\u{1b}[0;36m-\u{1b}[0;32m1234\
              \u{1b}[0;36m-\u{1b}[0mwhatever context\n",
-            |d, o| d.print_context(o, "fnZ", 1234, line),
+            |d, o| d.print_context(o, "fnZ", 1234, line, &vec![]),
         );
     }
 

@@ -120,7 +120,10 @@ fn search_in_file(
     let mut matches = Vec::new();
     let mut match_count: usize = 0;
 
-    let mut context = ContextBuffer::from_show_context(&params.show_context);
+    let mut context =
+        ContextBuffer::<Vec<scanner::NetCandidate>>::from_show_context(
+            &params.show_context,
+        );
 
     loop {
         // TODO: This could use some test case. But it looks like it
@@ -135,6 +138,12 @@ fn search_in_file(
         };
         lineno += 1;
 
+        // TODO: As an alternative to ipgrep -v, we'll probably want to
+        // invert needles, like '!192.168.2.0/24'. Probably:
+        // - A,B,C,D   => A | B | C | D
+        // - A,!B,C,!D => (A | C) & !(B | D)
+        // - !A,!B     => ALL & !(A | B)  (where: ALL = "0.0.0.0/0,::/0")
+
         for candidate in netcandidatescanner.find_all(&line, &file.name) {
             for needle in &params.needles {
                 if params.match_mode.matches(&candidate.net, &needle.net) {
@@ -146,21 +155,41 @@ fn search_in_file(
             }
         }
 
-        if matches.is_empty() {
+        // Mirroring GNU grep, we simply invert the lines we show. This
+        // also means we now also store matches (for highlighting) in the
+        // context buffer.
+        let is_line_selected = if params.invert_match {
+            matches.is_empty()
+        } else {
+            !matches.is_empty()
+        };
+
+        if !is_line_selected {
             if context.is_used() {
                 if context.should_print_after_line() {
                     assert_eq!(
                         params.output_style,
                         OutputStyle::ShowLinesAndContext
                     );
-                    disp.print_context(writer, &file.name, lineno, &line)?;
+                    disp.print_context(
+                        writer, &file.name, lineno, &line, &matches,
+                    )?;
                     context.update_last_printed(lineno);
                 } else {
-                    context.push_before_line(lineno, &line);
+                    context.push_before_line(
+                        lineno,
+                        &line,
+                        // We don't need the matches, let the buffer have them.
+                        std::mem::take(&mut matches),
+                    );
                 }
             }
         } else {
-            match_count += matches.len();
+            match_count += if params.invert_match {
+                1
+            } else {
+                matches.len()
+            };
 
             match params.output_style {
                 OutputStyle::JustExitCode
@@ -205,9 +234,12 @@ fn search_in_file(
                             )?;
                         }
                         // Print before-lines?
-                        for (c_lineno, c_line) in context.get_before_lines() {
+                        for (c_lineno, c_line, c_matches) in
+                            context.get_before_lines()
+                        {
                             disp.print_context(
                                 writer, &file.name, *c_lineno, c_line,
+                                c_matches,
                             )?;
                         }
                         context.clear_before_lines();
@@ -227,10 +259,9 @@ fn search_in_file(
                     }
                 }
             }
-
-            matches.clear();
         }
 
+        matches.clear();
         line.clear();
     }
 

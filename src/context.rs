@@ -10,7 +10,7 @@ pub struct ShowContext {
 }
 
 #[derive(Debug)]
-pub struct ContextBuffer {
+pub struct ContextBuffer<T> {
     // Boolean so we can quickly check/skip all the logic if nobody
     // wanted context.
     is_used: bool,
@@ -18,8 +18,8 @@ pub struct ContextBuffer {
     before: usize,
     // Keep N lines after.
     after: usize,
-    // The queue to keep the before lines in.
-    queue: VecDeque<(usize, Vec<u8>)>,
+    // The queue to keep the before lines in. We keep extra data T.
+    queue: VecDeque<(usize, Vec<u8>, T)>,
     // We don't need to keep the after lines in a queue; we can print
     // them directly.
     after_remaining: usize,
@@ -28,7 +28,7 @@ pub struct ContextBuffer {
     last_printed_lineno: usize,
 }
 
-impl ContextBuffer {
+impl<T> ContextBuffer<T> {
     pub fn from_show_context(show_context: &ShowContext) -> Self {
         Self {
             is_used: show_context.before > 0 || show_context.after > 0,
@@ -52,12 +52,12 @@ impl ContextBuffer {
             return false;
         }
         let first_c_lineno =
-            self.queue.front().map(|(n, _)| *n).unwrap_or(lineno);
+            self.queue.front().map(|(n, _, _)| *n).unwrap_or(lineno);
         first_c_lineno > self.last_printed_lineno + 1
     }
 
     /// Get the before-lines.
-    pub fn get_before_lines(&self) -> &VecDeque<(usize, Vec<u8>)> {
+    pub fn get_before_lines(&self) -> &VecDeque<(usize, Vec<u8>, T)> {
         &self.queue
     }
 
@@ -67,11 +67,16 @@ impl ContextBuffer {
     }
 
     /// Call when no match is found and we're not printing after-lines.
-    pub fn push_before_line(&mut self, lineno: usize, line: &[u8]) {
+    pub fn push_before_line(
+        &mut self,
+        lineno: usize,
+        line: &[u8],
+        extra_data: T,
+    ) {
         if self.before == 0 {
             return;
         }
-        self.queue.push_back((lineno, line.to_vec()));
+        self.queue.push_back((lineno, line.to_vec(), extra_data));
         if self.queue.len() > self.before {
             self.queue.pop_front();
         }
@@ -112,14 +117,14 @@ mod tests {
             before: 2,
             after: 0,
         };
-        let mut ctx = ContextBuffer::from_show_context(&show);
+        let mut ctx = ContextBuffer::<()>::from_show_context(&show);
 
-        ctx.push_before_line(1, &line(1));
-        ctx.push_before_line(2, &line(2));
-        ctx.push_before_line(3, &line(3)); // should evict line1
+        ctx.push_before_line(1, &line(1), ());
+        ctx.push_before_line(2, &line(2), ());
+        ctx.push_before_line(3, &line(3), ()); // should evict line1
 
         let collected: Vec<_> =
-            ctx.get_before_lines().iter().map(|(n, _)| *n).collect();
+            ctx.get_before_lines().iter().map(|(n, _, _)| *n).collect();
         assert_eq!(collected, vec![2, 3], "queue keeps last N lines");
     }
 
@@ -129,7 +134,7 @@ mod tests {
             before: 0,
             after: 2,
         };
-        let mut ctx = ContextBuffer::from_show_context(&show);
+        let mut ctx = ContextBuffer::<()>::from_show_context(&show);
 
         ctx.request_after();
         assert!(ctx.should_print_after_line(), "first after line allowed");
@@ -143,10 +148,10 @@ mod tests {
             before: 2,
             after: 0,
         };
-        let mut ctx = ContextBuffer::from_show_context(&show);
+        let mut ctx = ContextBuffer::<()>::from_show_context(&show);
 
         // First match: no delimiter.
-        ctx.push_before_line(10, &line(10));
+        ctx.push_before_line(10, &line(10), ());
         ctx.update_last_printed(0);
         assert!(!ctx.is_new_match_block(10), "first block => no delimiter");
 
@@ -155,7 +160,7 @@ mod tests {
         ctx.update_last_printed(12);
 
         // Second block, nearby lines: still no delimiter.
-        ctx.push_before_line(13, &line(13));
+        ctx.push_before_line(13, &line(13), ());
         assert!(
             !ctx.is_new_match_block(13),
             "adjacent block => no delimiter"
@@ -166,7 +171,7 @@ mod tests {
         ctx.update_last_printed(13);
 
         // Now add a far-away line; should cause delimiter.
-        ctx.push_before_line(30, &line(30));
+        ctx.push_before_line(30, &line(30), ());
         assert!(
             ctx.is_new_match_block(30),
             "non-contiguous block => delimiter needed"
@@ -179,9 +184,9 @@ mod tests {
             before: 2,
             after: 0,
         };
-        let mut ctx = ContextBuffer::from_show_context(&show);
-        ctx.push_before_line(1, &line(1));
-        ctx.push_before_line(2, &line(2));
+        let mut ctx = ContextBuffer::<()>::from_show_context(&show);
+        ctx.push_before_line(1, &line(1), ());
+        ctx.push_before_line(2, &line(2), ());
         assert_eq!(ctx.get_before_lines().len(), 2);
         ctx.clear_before_lines();
         assert!(ctx.get_before_lines().is_empty(), "queue cleared");
@@ -193,7 +198,7 @@ mod tests {
             before: 1,
             after: 1,
         };
-        let mut ctx = ContextBuffer::from_show_context(&show);
+        let mut ctx = ContextBuffer::<()>::from_show_context(&show);
         assert!(ctx.is_used, "context should be marked used");
         ctx.update_last_printed(42);
         assert_eq!(ctx.last_printed_lineno, 42);
@@ -202,10 +207,10 @@ mod tests {
     #[test]
     fn test_unused_context_does_nothing() {
         let show = ShowContext::default();
-        let mut ctx = ContextBuffer::from_show_context(&show);
+        let mut ctx = ContextBuffer::<()>::from_show_context(&show);
 
         assert!(!ctx.is_used, "unused context");
-        ctx.push_before_line(1, &line(1));
+        ctx.push_before_line(1, &line(1), ());
         assert!(
             ctx.get_before_lines().is_empty(),
             "no lines should be queued"

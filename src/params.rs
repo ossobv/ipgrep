@@ -13,6 +13,7 @@ pub struct Parameters {
     // General Output Control:
     pub output_style: OutputStyle,
     pub rewrite_output_prefix: Option<u8>,
+    pub invert_match: bool,
     // Output Line Prefix Control:
     pub hide_filename: bool,
     pub show_lineno: bool,
