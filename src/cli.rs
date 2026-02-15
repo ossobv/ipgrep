@@ -73,7 +73,14 @@ Example invocations:
   ipgrep -C 5 -a net -a oldnet [-m contains] -r 192.168.2.5,10.0.2.1 /etc/*
 
   # Output linefeed separated IPs of all IPv4 hosts/interfaces.
-  ipgrep [-m within] -o 0.0.0.0/0 input.txt",
+  ipgrep [-m within] -o 0.0.0.0/0 input.txt
+
+  # Find all unique /24 networks in a pcap. Requires a bit of sed magic
+  # because tcpdump outputs the port as the fifth octet.
+  tcpdump -nr my.pcap |
+    sed -Ee 's/([0-9]+([.][0-9]+){3})[.]([0-9]+)/\\1:\\3/g' |
+    ipgrep -O24 | sort | uniq -c | sort -k2V
+  ",
     help_template="\
 {name} {version} - {about}
 
@@ -146,6 +153,19 @@ Match mode:
         help_heading = "General Output Control"
     )]
     pub only_matching: bool,
+
+    /// Print only the matching IPs/networks, but changed to the
+    /// specified network size
+    #[arg(
+        short = 'O',
+        long = "output-prefix",
+        help_heading = "General Output Control",
+        long_help="\
+Implies -o/--only-matching. Truncates found IPs/networks to the specified
+prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
+        value_parser = clap::value_parser!(u8).range(0..=128)
+    )]
+    pub output_prefix: Option<u8>,
 
     /// Quiet; exit status only
     #[arg(
@@ -274,6 +294,7 @@ impl Args {
             interface_mode: self.interface_mode.into(),
             match_mode,
             output_style,
+            rewrite_output_prefix: self.output_prefix,
             hide_filename: self.no_filename,
             show_lineno: self.line_number,
             show_context,
@@ -303,7 +324,7 @@ impl Args {
         } else if self.count {
             // -c/--count
             OutputStyle::ShowCountsPerFile
-        } else if self.only_matching {
+        } else if self.only_matching || self.output_prefix.is_some() {
             // -o/--only-matching
             OutputStyle::ShowOnlyMatching
         } else {

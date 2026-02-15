@@ -12,6 +12,7 @@ pub struct Parameters {
     pub match_mode: MatchMode,
     // General Output Control:
     pub output_style: OutputStyle,
+    pub rewrite_output_prefix: Option<u8>,
     // Output Line Prefix Control:
     pub hide_filename: bool,
     pub show_lineno: bool,

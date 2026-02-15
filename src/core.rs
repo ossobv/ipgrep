@@ -180,9 +180,19 @@ fn search_in_file(
                     // between the matches.
                     // Do we want to implement this? Seems like an
                     // implementation detail, and not something useful.
-                    disp.print_matches(
-                        writer, &file.name, lineno, &line, &matches,
-                    )?;
+                    if let Some(rewrite_prefix) = params.rewrite_output_prefix {
+                        disp.print_network_matches(
+                            writer,
+                            &file.name,
+                            lineno,
+                            rewrite_prefix,
+                            &matches,
+                        )?;
+                    } else {
+                        disp.print_matches(
+                            writer, &file.name, lineno, &line, &matches,
+                        )?;
+                    }
                 }
                 OutputStyle::ShowLinesAndContext => {
                     if context.is_used() {

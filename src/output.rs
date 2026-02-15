@@ -121,6 +121,40 @@ impl Display {
         Ok(())
     }
 
+    pub fn print_network_matches(
+        &self,
+        writer: &mut dyn Write,
+        filename: &str,
+        lineno: usize,
+        rewrite_prefix: u8,
+        matches: &Vec<NetCandidate>,
+    ) -> io::Result<()> {
+        for match_ in matches {
+            if self.show_filename {
+                self.write_filename(writer, filename)?;
+                self.write_separator(writer, b":")?;
+            }
+            if self.show_lineno {
+                self.write_linenumber(writer, lineno)?;
+                self.write_separator(writer, b":")?;
+            }
+            let mut network = match_.net.0;
+            // Only adjust downwards (i.e., making the network larger by
+            // reducing the prefix length).
+            if rewrite_prefix <= network.prefix_len() {
+                if let Ok(new_net) =
+                    ipnet::IpNet::new(network.addr(), rewrite_prefix)
+                {
+                    network = new_net.trunc();
+                }
+            }
+            self.write_match_manual(writer, &network.to_string())?;
+            self.write_no_color(writer)?;
+            self.write(writer, b"\n")?;
+        }
+        Ok(())
+    }
+
     pub fn print_context(
         &self,
         writer: &mut dyn Write,
@@ -240,6 +274,19 @@ impl Display {
         let start = match_.range.0;
         let end = match_.range.1;
         writer.write_all(&line[start..end.min(line.len())])?;
+        Ok(())
+    }
+
+    #[inline]
+    fn write_match_manual(
+        &self,
+        writer: &mut dyn Write,
+        custom: &str,
+    ) -> io::Result<()> {
+        if self.show_color {
+            writer.write_all(COLOR_MATCH.as_bytes())?;
+        }
+        writer.write_all(custom.as_bytes())?;
         Ok(())
     }
 
@@ -402,6 +449,39 @@ mod tests {
              \u{1b}[0;35mfn\u{1b}[0;36m:\u{1b}[0;32m354\u{1b}[0;36m\
              :\u{1b}[1;31m10.20.30.20\u{1b}[0m\n",
             |d, o| d.print_matches(o, "fn", 354, line, &matches),
+        );
+    }
+
+    #[test]
+    fn display_print_network_matches() {
+        let _line = b"nets: 10.20.30.1-10.20.30.20-192.168.2.129 <--\n";
+        let matches = vec![
+            NetCandidate {
+                range: (6, 16),
+                net: Net::from_str_unchecked("10.20.30.1"),
+            },
+            NetCandidate {
+                range: (17, 28),
+                net: Net::from_str_unchecked("10.20.30.20"),
+            },
+            NetCandidate {
+                range: (29, 42),
+                net: Net::from_str_unchecked("192.168.2.129"),
+            },
+        ];
+        check_display(
+            Display::new(),
+            "\u{1b}[1;31m10.20.30.0/24\u{1b}[0m\n\
+             \u{1b}[1;31m10.20.30.0/24\u{1b}[0m\n\
+             \u{1b}[1;31m192.168.2.0/24\u{1b}[0m\n",
+            |d, o| d.print_network_matches(o, "fn", 351, 24, &matches),
+        );
+        check_display(
+            Display::new(),
+            "\u{1b}[1;31m10.20.30.0/29\u{1b}[0m\n\
+             \u{1b}[1;31m10.20.30.16/29\u{1b}[0m\n\
+             \u{1b}[1;31m192.168.2.128/29\u{1b}[0m\n",
+            |d, o| d.print_network_matches(o, "fn", 351, 29, &matches),
         );
     }
 
