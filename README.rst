@@ -22,10 +22,9 @@ Examples
 
 *Find IPs contained inside your supplied ranges*::
 
-    $ ip -br a | ipgrep 127.0.0.0/8 -m within
-    lo               UNKNOWN        127.0.0.1/8 ::1/128
+    $ ip -br a | ipgrep localhost
 
-**NOTE: The default -m mode changes from "contains" to "within" when the
+**NOTE: The default -m mode changes from "contains" to "within" when
 any needle is a network larger than a single IP.**
 
 *Find exact IP matches*::
@@ -35,13 +34,25 @@ any needle is a network larger than a single IP.**
 
 *Find and show only the matches*::
 
-    $ ip -br a | ipgrep 127.0.0.1,::1 -o
+    $ ip -br a | ipgrep localhost -o
     127.0.0.1/8
     ::1/128
 
+    $ ip -br a | ipgrep '!localhost4' -o
+    192.168.2.49/24
+    172.17.0.1/16
+    172.18.0.1/16
+
+*Truncate the matches*::
+
+    $ ip -br a | ipgrep '!localhost4' -O12
+    192.160.0.0/12
+    172.16.0.0/12
+    172.16.0.0/12
+
 *Supports IPv6*::
 
-    $ ipgrep fe00::/7 /etc/hosts -m within
+    $ ipgrep fe00::/7 /etc/hosts
     fe00::0 ip6-localnet
     ff00::0 ip6-mcastprefix
     ff02::1 ip6-allnodes
@@ -49,8 +60,22 @@ any needle is a network larger than a single IP.**
 
 *Looking for IPv4-mapped IPv6 addresses?*::
 
-    $ echo ::ffff:127.0.0.1 | ipgrep ::ffff:0:0/96 -m w
+    $ echo ::ffff:127.0.0.1 | ipgrep ::ffff:0:0/96
     ::ffff:127.0.0.1
+
+*Look for a few IPs in all networks found in /etc*::
+
+    ipgrep -C 5 -a net -a oldnet -r 192.168.2.5,10.0.2.1 /etc/*
+
+*Find all unique /24 networks in a pcap. Requires a bit of sed magic
+because tcpdump outputs the port as the fifth octet.*::
+
+    tcpdump -nr my.pcap |
+      sed -Ee 's/([0-9]+([.][0-9]+){3})[.]([0-9]+)/\1:\3/g' |
+      ipgrep -O24 | sort | uniq -c | sort -k2V
+
+After *sed* has turned all IPs into 4-tuples *ipgrep* can match them
+and print them as ``x.x.x.0/24``.
 
 
 -----
@@ -144,30 +169,6 @@ This is a slightly polished version of the inline ``--help``::
 
 The options mimic standard (GNU) *grep* options.
 
-Example invocations:
-
-*Look for a few IPs in all networks found in /etc*::
-
-    ipgrep -C 5 -a net -a oldnet -r 192.168.2.5,10.0.2.1 /etc/*
-
-Because the needles only contain single IPs, match-mode (-m) defaults to
-'contains'.
-
-*Output linefeed separated IPs of all IPv4 hosts/interfaces*::
-
-    ipgrep [-m within] -o 0.0.0.0/0 input.txt
-
-Because the (any) needle is a network, match-mode (-m) defaults to 'within'.
-
-*Find all unique /24 networks in a pcap. Requires a bit of sed magic
-because tcpdump outputs the port as the fifth octet.*::
-
-    tcpdump -nr my.pcap |
-      sed -Ee 's/([0-9]+([.][0-9]+){3})[.]([0-9]+)/\1:\3/g' |
-      ipgrep -O24 | sort | uniq -c | sort -k2V
-
-After sed(1) has turned all IPs into 4-tuples *ipgrep* can match them
-and print them as ``x.x.x.0/24``.
 
 --------------------------
 Prior art / feature parity
