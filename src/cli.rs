@@ -200,7 +200,7 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     pub line_number: bool,
 
     /// Output a zero byte instead of LF in output; only useful in
-    /// combination with -l
+    /// tandem with -l
     #[arg(
         short = 'Z',
         long = "null",
@@ -208,7 +208,7 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     )]
     pub null: bool,
 
-    /// print NUM lines of leading context
+    /// Print NUM lines of leading context
     #[arg(
         short = 'B',
         long = "before-context",
@@ -216,7 +216,7 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     )]
     pub before_context: Option<usize>,
 
-    /// print NUM lines of trailing context
+    /// Print NUM lines of trailing context
     #[arg(
         short = 'A',
         long = "after-context",
@@ -224,7 +224,7 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     )]
     pub after_context: Option<usize>,
 
-    /// print NUM lines of output context
+    /// Print NUM lines of output context
     #[arg(
         short = 'C',
         long = "context",
@@ -266,18 +266,23 @@ prefix length. E.g. pass 24 to get 192.168.2.0/24 instead of 192.168.2.4",
     )]
     pub version: Option<bool>,
 
-    /// Needles (one or more networks separated by comma or whitespace).
-    ///
-    /// Multiple arguments are OR-ed together. Negation is also allowed,
-    /// they are AND-ed together.
-    ///
-    /// Examples:
-    /// - 10.0.0.0/8,!10.2.0.0/16,fc00::/7 means (A|C)&!B.
-    /// - !10.0.0.0/8 means 0.0.0.0/0 without 10.0.0.0/8
-    ///
-    /// Also valid needles are classes, like "ip4", "ip6", "global",
-    /// "localhost", "multicast", "private". They can also be negated.
-    #[arg(default_value = "ip4,ip6")]
+    /// Needles (one or more networks separated by comma or whitespace)
+    #[arg(
+        default_value = "ip4,ip6",
+        long_help = "\
+Needles are one or more IP addresses, networks or IP classes (separated
+by comma/whitespace). Needles may be negated by prefixing them with a '!'.
+Matches are made if any of the positive needles match and none of the
+negative ones do.
+
+Examples of valid needles:
+- ip4,ip6 (default)
+- 192.168.0.0/16
+- 10.0.0.0/8,!10.2.0.0/16,fc00::/7
+- ip4,!rfc1918
+
+Valid classes include: ip4, ip6, global, localhost4, multicast6, private."
+    )]
     pub needles: NeedleArg,
 
     /// Haystacks are one or more files. If none (or '-') given, stdin is read.

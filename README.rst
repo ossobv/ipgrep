@@ -57,84 +57,117 @@ any needle is a network larger than a single IP.**
 Usage
 -----
 
-The following help was created before any development was done::
+This is a slightly polished version of the inline ``--help``::
 
-    ipgrep 0.1.0 - Search IP addresses and networks in text files
+    ipgrep - Search IP addresses and networks in text files
 
-    Usage:
-      ipgrep [OPTIONS] NEEDLES [HAYSTACK...]
-      cat file.txt | ipgrep [OPTIONS] NEEDLES
+    Usage: ipgrep [OPTIONS] [NEEDLES] [HAYSTACKS]...
 
-    Needles are IPs or networks (e.g. 192.0.2.1, 2001:db8::/32).
-    Multiple needles may be separated by commas or repeated.
+    Arguments:
+      NEEDLES are one or more IP addresses, networks or IP classes (separated
+      by comma/whitespace). Needles may be negated by prefixing them with a '!'.
+      Matches are made if any of the positive needles match and none of the
+      negative ones do.
 
-    Haystacks are one or more files. If none given, stdin is read.
+      Examples of valid needles:
+      - ip4,ip6 (default)
+      - 192.168.0.0/16
+      - 10.0.0.0/8,!10.2.0.0/16,fc00::/7
+      - ip4,!rfc1918
 
-    The haystack lines may contain multiple IPs. These possible matches are
-    referred to as items below.
+      Valid classes include: ip4, ip6, global, localhost4, multicast6, private.
 
-    The options follow (closely mimicking grep options).
-
-    Generic Program Information:
-      --help                    Output a usage message and exit
-      -V, --version             Print version and exit
+      HAYSTACKS are one or more files. If none (or '-') given,
+      stdin is read
 
     Matching Control:
-      -a, --accept <MODE>       Accept input forms (may repeat or use commas):
-                                  ip     - bare host IP
-                                  net    - valid network (CIDR)
-                                  oldnet - valid network (host/dotted-netmask)
-                                  iface  - interface IP (host/mask)
-                                  [default: ip,net,iface]
-      -I, --interface-mode      Select interface IP matching mode (default: ip):
-                                  ip       - treat as single IP
-                                  net      - treat as if network bits were unset
-                                  complain - complain/reject network bits
-      -m, --match <TYPE>        Match mode (default: contains):
-                                  contains - haystack net contains needle net
-                                  within   - needle net contains haystack net
-                                  equals   - exact IP or network equality
-                                  overlaps - haystack and needle nets overlap
+      -a, --accept <ACCEPT>
+        Accept input forms (may repeat or use commas):
+          ip        - bare host IP
+          net       - valid network (CIDR)
+          oldnet    - valid network (host/dotted-netmask)
+          iface     - interface IP (host/mask)
+        Defaults to: ip,net,iface
+
+      -I, --interface-mode <INTERFACE_MODE>
+        Select interface IP matching mode:
+          ip        - treat as single IP (default)
+          net       - treat as if network bits were unset
+          complain  - complain/reject when network bits are set
+
+      -m, --match <MATCH_MODE>
+        Match mode:
+          auto     - 'contains' if the all needles are a single IP,
+                     else 'within' (default)
+          contains - haystack net contains needle net
+          within   - haystack net is within needle net (inverse of contains)
+          equals   - exact IP or network equality
+          overlaps - haystack and needle nets overlap
 
     General Output Control:
-      -c, --count               Print only a count of matching items
+      -c, --count               Print only a count of matching records
       -l, --files-with-matches  List filenames with matches only
       -o, --only-matching       Print only the matching IPs/networks
+      -O, --output-prefix <OUTPUT_PREFIX>
+        Implies -o/--only-matching. Truncates found IPs/networks to the
+        specified prefix length. E.g. pass 24 to get 192.168.2.0/24 instead
+        of 192.168.2.4
       -q, --quiet               Quiet; exit status only
+      -v, --invert-match        Select non-matching lines; can include non-IPs
 
     Output Line Prefix Control:
       -h, --no-filename         Suppress filename prefix on output
-      -n, --line-number         Prefix each output line (or item) with lineno
+      -n, --line-number         Prefix each output line/record with lineno
       -Z, --null                Output a zero byte instead of LF in output;
-                                only useful in combination with -l
+                                useful in tandem with -l
 
     Context Line Control:
-      -A NUM, --after-context=NUM   Print NUM context lines before a match
-      -B NUM, --before-context=NUM  Print NUM context lines after a match
-      -C NUM, --context=NUM         Shorthand for -A NUM -B NUM
+      -B, --before-context <N>  Print N lines of leading context
+      -A, --after-context <N>   Print N lines of trailing context
+      -C, --context <N>         Print N lines of output context
 
     File and Directory Selection:
       -r, --recursive               Read files under each directory, recursively
       -R, --dereference-recursive   Dereference symlinks while doing so
 
     Other Options:
-      --line-buffered           Disable output buffering when writing to non-tty
+          --line-buffered       Flush output on every line
+
+    Generic Program Information:
+          --help                Show help
+      -V, --version             Show program version
 
     Exit status:
       0 if match found
       1 if no match found
       2 if error
 
-    Example invocations:
-      # Look for a few IPs in all networks found in /etc.
-      ipgrep -C 5 -a net -a oldnet -r 192.168.2.5,192.168.2.78 /etc/*
+The options mimic standard (GNU) *grep* options.
 
-      # Output linefeed separated IPs of all IPv4 hosts/interfaces.
-      ipgrep -m within -o 0.0.0.0/0 input.txt
+Example invocations:
 
-It's slightly more readable/concise than the Rust clap output.
-See ``ipgrep --help`` for the actual output, which should be 100% compatible.
+*Look for a few IPs in all networks found in /etc*::
 
+    ipgrep -C 5 -a net -a oldnet -r 192.168.2.5,10.0.2.1 /etc/*
+
+Because the needles only contain single IPs, match-mode (-m) defaults to
+'contains'.
+
+*Output linefeed separated IPs of all IPv4 hosts/interfaces*::
+
+    ipgrep [-m within] -o 0.0.0.0/0 input.txt
+
+Because the (any) needle is a network, match-mode (-m) defaults to 'within'.
+
+*Find all unique /24 networks in a pcap. Requires a bit of sed magic
+because tcpdump outputs the port as the fifth octet.*::
+
+    tcpdump -nr my.pcap |
+      sed -Ee 's/([0-9]+([.][0-9]+){3})[.]([0-9]+)/\1:\3/g' |
+      ipgrep -O24 | sort | uniq -c | sort -k2V
+
+After sed(1) has turned all IPs into 4-tuples *ipgrep* can match them
+and print them as ``x.x.x.0/24``.
 
 --------------------------
 Prior art / feature parity
@@ -146,52 +179,47 @@ already, and then a few called ``cidrgrep``, ``cidr-grep`` and
 ``grepcidr``. Here's an attempt at enumerating other versions and their
 features. Ordered by feature-completeness.
 
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Features in application              | ipgrep   | grep     | grepcidr | grepcidr | ipgrep   | ipgrep   | cidr-grep | cidrgrep | ipgrep   | ipgrep   | ipgrep   | ipgrep   | ...      |
-+======================================+==========+==========+==========+==========+==========+==========+===========+==========+==========+==========+==========+==========+==========+
-| Author/source                        | ossobv_  | POSIX    | levine_  | berkes_  | robrwo_  | joonas_  | pangraz_  | doherty_ | dmages_  | jstarke_ | princeb_ | jesdict_ | ...      |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Version                              | 0.1.3    | *many*   | 3.02     | 2.0      | 0.7.0    | 0.3.2    | 1.0.3     | *none*   | 0.2      | 0.2.0    | *none*   | 1.0.1    | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Last updated                         | 2025     | 2025     | 2025     | 2014     | 2023     | 2025     | 2015      | 2020     | 2019     | 2023     | 2016     | 2023     | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Programming language                 | rust     | C        | C        | C        | perl     | golang   | nodejs    | golang   | perl     | rust     | golang   | python   | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| IP address aware [1]_                | ✅       | ❌       | ✅ [6]_  | ✅       | ✅ [6]_  | ✅ [6]_  | ✅        | ✅ [6]_  | ✅       | ✅       | ✅ [6]_  | ✅       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Search by needle(s) [2]_             | ✅       | ✅       | 🟡 [2]_  | 🟡 [2]_  | 🟡 [2]_  | 🟡       | ✅        | 🟡       | 🟡       | ❌       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Search by IP class (e.g. "public")   | ⏳ #3    | ❌       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Network/CIDR "contains" match        | ✅       | ❌       | ✅       | ✅       | ✅       | ✅       | ✅        | ✅       | ✅       | ❌       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Handles legacy 1.2.3.0m255.255.255.0 | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Handles IPv6                         | ✅       | ✅ [1]_  | ✅       | ✅       | ✅       | ✅       | ❌        | ❌       | ❌ [7]_  | ❌       | ✅       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Search multiple files                | ✅       | ✅       | ✅       | ✅       | ✅       | ✅       | ✅        | ✅       | 🟡 [7]_  | ✅       | ✅       | ✅       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Search directories recursively       | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Highlight/colorize matches           | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Extract only IPs (-o) [3]_           | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌        | ❌       | ❌       | ❌       | 🟡       | 🟡       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Support negative match (-v)          | ⏳ #2    | ✅       | ✅       | ✅       | ✅       | ❌       | ❌        | ❌       | ❌       | ✅       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Support showing context lines (-C)   | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Support showing counts (-c)          | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Deobfuscate / resolve hostnames [4]_ | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ✅       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| Run duration [5]_                    | **1**    | ∅        | **1.3**  | **1.8**  | **3.7**  | **4.2**  | ∅         | ∅        | ∅        | ∅        | ∅        | ∅        | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-| ...                                  | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       | ❔        | ❔       | ❔       | ❔       | ❔       | ❔       | ❔       |
-+--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+----------+
-
-**In the above table ⏳ might mean that it's under consideration. Not
-that it's necessarily coming soon.**
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Features in application              | ipgrep   | grep     | grepcidr | grepcidr | ipgrep   | ipgrep   | cidr-grep | cidrgrep | ipgrep   | ipgrep   | ipgrep   | ipgrep   |
++======================================+==========+==========+==========+==========+==========+==========+===========+==========+==========+==========+==========+==========+
+| Author/source                        | ossobv_  | POSIX    | levine_  | berkes_  | robrwo_  | joonas_  | pangraz_  | doherty_ | dmages_  | jstarke_ | princeb_ | jesdict_ |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Version                              | 0.1.3    | *many*   | 3.02     | 2.0      | 0.7.0    | 0.3.2    | 1.0.3     | *none*   | 0.2      | 0.2.0    | *none*   | 1.0.1    |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Last updated                         | 2025     | 2025     | 2025     | 2014     | 2023     | 2025     | 2015      | 2020     | 2019     | 2023     | 2016     | 2023     |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Programming language                 | rust     | C        | C        | C        | perl     | golang   | nodejs    | golang   | perl     | rust     | golang   | python   |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| IP address aware [1]_                | ✅       | ❌       | ✅ [6]_  | ✅       | ✅ [6]_  | ✅ [6]_  | ✅        | ✅ [6]_  | ✅       | ✅       | ✅ [6]_  | ✅       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Search by needle(s) [2]_             | ✅       | ✅       | 🟡 [2]_  | 🟡 [2]_  | 🟡 [2]_  | 🟡       | ✅        | 🟡       | 🟡       | ❌       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Search by IP class (e.g. "public")   | ✅       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ✅       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Network/CIDR "contains" match        | ✅       | ❌       | ✅       | ✅       | ✅       | ✅       | ✅        | ✅       | ✅       | ❌       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Handles legacy 1.2.3.0m255.255.255.0 | ❌       | ❌       | ❌       | ❌       | ❌       | ✅       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Handles IPv6                         | ✅       | ✅ [1]_  | ✅       | ✅       | ✅       | ✅       | ❌        | ❌       | ❌ [7]_  | ❌       | ✅       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Search multiple files                | ✅       | ✅       | ✅       | ✅       | ✅       | ✅       | ✅        | ✅       | 🟡 [7]_  | ✅       | ✅       | ✅       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Search directories recursively       | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Highlight/colorize matches           | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ✅       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Extract only IPs (-o) [3]_           | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌        | ❌       | ❌       | ❌       | 🟡       | 🟡       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Support negative match (-v)          | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌        | ❌       | ❌       | ✅       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Support showing context lines (-C)   | ✅       | ✅       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Support showing counts (-c)          | ✅       | ✅       | ✅       | ✅       | ✅       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ❌       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Deobfuscate / resolve hostnames [4]_ | ❌       | ❌       | ❌       | ❌       | ❌       | ❌       | ❌        | ❌       | ❌       | ❌       | ❌       | ✅       |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
+| Run duration [5]_                    | **1**    | ∅        | **1.3**  | **1.8**  | **3.7**  | **4.2**  | ∅         | ∅        | ∅        | ∅        | ∅        | ∅        |
++--------------------------------------+----------+----------+----------+----------+----------+----------+-----------+----------+----------+----------+----------+----------+
 
 .. [1] **POSIX grep** does not have any notion of IP addresses,
    but it can match both IPv4 and IPv6 if you provide the right
@@ -223,7 +251,8 @@ that it's necessarily coming soon.**
 
 Other tools not shown in the list:
 
-* markust_: **markusthilo/ipgrep** (v0.3, 2020, C) merges and filters PCAP files.
+* markust_: **markusthilo/ipgrep** (v0.3, 2020, C) merges and filters
+  PCAP files.
 
 .. _ossobv: https://github.com/ossobv/ipgrep
 .. _berkes: https://www.pc-tools.net/unix/grepcidr/
