@@ -20,9 +20,10 @@ Examples
     -A OUTPUT -d 192.168.0.0/16 -j DROP
     -A OUTPUT -d 172.16.0.0/12 -j DROP
 
-*Find IPs contained inside your supplied ranges*::
+*Find IPs contained inside your supplied ranges, using address classes*::
 
     $ ip -br a | ipgrep localhost
+    lo               UNKNOWN        127.0.0.1/8 ::1/128
 
 **NOTE: The default -m mode changes from "contains" to "within" when
 any needle is a network larger than a single IP.**
